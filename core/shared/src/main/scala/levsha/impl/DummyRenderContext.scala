@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.impl
+package avocet.impl
 
-import levsha.{RenderContext, XmlNs}
+import avocet.{RenderContext, XmlNs}
 
 /**
   * This render context does nothing

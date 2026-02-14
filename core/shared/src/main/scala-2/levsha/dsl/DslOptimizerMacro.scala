@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
-import levsha.Document.{Attr, Node, Style, Empty => DEmpty}
+import avocet.Document.{Attr, Node, Style, Empty => DEmpty}
 
 import scala.reflect.macros.blackbox
 
@@ -113,12 +113,12 @@ final class DslOptimizerMacro(val c: blackbox.Context) {
       // scala 2.13
       case converter("seqToNode", q"${seq: Tree}.map[$_](${f: Function})") => optimizeSeq(seq, f)
       // Optimize empty nodes
-      case q"levsha.dsl.`package`.void" => q"()"
-      case q"levsha.Document.Empty" => q"()"
+      case q"avocet.dsl.`package`.void" => q"()"
+      case q"avocet.Document.Empty" => q"()"
       // Optimize control flow
       case q"if ($cond) ${lhs: Tree} else ${rhs: Tree}" =>
         q"if ($cond) ${aux(lhs)} else ${aux(rhs)}"
-      case q"levsha.dsl.`package`.when[$_]($cond)($tree)" =>
+      case q"avocet.dsl.`package`.when[$_]($cond)($tree)" =>
         q"if ($cond) ${aux(tree)}"
       case q"$expr match { case ..$cases }" =>
         val optimizedCases = cases map {
@@ -127,7 +127,7 @@ final class DslOptimizerMacro(val c: blackbox.Context) {
         }
         q"$expr match { case ..$optimizedCases }"
       // Can't optimize
-      case expr if expr.tpe <:< weakTypeOf[levsha.Document[T]] =>
+      case expr if expr.tpe <:< weakTypeOf[avocet.Document[T]] =>
         logUnableToOptimizeTree(expr)
         q"$expr.apply(rc)"
       // Skip this code
@@ -135,7 +135,7 @@ final class DslOptimizerMacro(val c: blackbox.Context) {
     }
     c.untypecheck {
       q"""
-        levsha.Document.Node[$T]{ rc =>
+        avocet.Document.Node[$T]{ rc =>
           ${aux(node)}
         }
       """

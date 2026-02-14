@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.impl
+package avocet.impl
 
-import levsha.impl.internal.Op._
+import avocet.impl.internal.Op._
 
 /**
   * Generates HTML5 output.

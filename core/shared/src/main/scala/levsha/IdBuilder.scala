@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
 import java.nio.ShortBuffer
 import scala.collection.mutable

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
-import levsha.XmlNs
+import avocet.XmlNs
 import XmlNs.{svg => svgNs, html => htmlNs}
 
 /**

@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-package levsha.impl
+package avocet.impl
 
 import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.charset.StandardCharsets
-import levsha._
-import levsha.impl.DiffRenderContext._
-import levsha.impl.internal.Op._
+import avocet._
+import avocet.impl.DiffRenderContext._
+import avocet.impl.internal.Op._
 
 import scala.annotation.switch
 import internal.debox.{IntByteBufferMap, IntStringMap, StringSet}
-import levsha.impl.internal.StringHelper
+import avocet.impl.internal.StringHelper
 
 import scala.util.hashing.MurmurHash3
 

@@ -1,7 +1,7 @@
-//package levsha.benchmark
+//package avocet.benchmark
 //
 //import org.openjdk.jmh.annotations.{Benchmark, Param, Scope, State}
-//import levsha.dsl.SymbolDsl
+//import avocet.dsl.SymbolDsl
 //
 //@State(Scope.Benchmark)
 //class StaticRenderingComparision {
@@ -9,7 +9,7 @@
 //  import StaticRenderingComparision.engines
 //
 //  // TODO "beard"
-//  @Param(Array("levsha", "scalatags", "twirl"))
+//  @Param(Array("avocet", "scalatags", "twirl"))
 //  var engineName: String = _
 //
 //  @Benchmark def simpleHtml(): Unit = engines(engineName).simpleHtml()
@@ -27,12 +27,12 @@
 //
 //  val engines = Map(
 //
-//    "levsha" -> new TemplateEngine {
+//    "avocet" -> new TemplateEngine {
 //
 //      val symbolDsl = new SymbolDsl[Nothing]()
 //
 //      import sharedContent._
-//      import levsha.text.renderHtml
+//      import avocet.text.renderHtml
 //      import symbolDsl._
 //
 //      def simpleHtml(): Unit = {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
 /**
   * @author Aleksey Fomkin <aleksey.fomkin@gmail.com>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
 trait StatefulRenderContext[-M] extends RenderContext[M] {
   def currentContainerId: Id

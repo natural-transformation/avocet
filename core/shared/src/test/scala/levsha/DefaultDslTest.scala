@@ -1,13 +1,13 @@
-package levsha
+package avocet
 
-import levsha.Document.Node
-import levsha.impl.TextPrettyPrintingConfig
-import levsha.text._
+import avocet.Document.Node
+import avocet.impl.TextPrettyPrintingConfig
+import avocet.text._
 
 object DefaultDslTest extends utest.TestSuite {
 
-  import levsha.dsl._
-  import levsha.dsl.html._
+  import avocet.dsl._
+  import avocet.dsl.html._
 
   def tests = {
     import utest._

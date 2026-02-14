@@ -1,12 +1,12 @@
-package levsha
+package avocet
 
-import levsha.impl.{TextPrettyPrintingConfig, XhtmlRenderContext}
+import avocet.impl.{TextPrettyPrintingConfig, XhtmlRenderContext}
 import utest._
 
 object XhtmlRenderContextTest extends TestSuite {
 
-  import levsha.dsl._
-  import levsha.dsl.html._
+  import avocet.dsl._
+  import avocet.dsl.html._
 
   val tests = this {
     test("text nodes should be escaped") - {

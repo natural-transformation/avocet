@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package levsha.impl
+package avocet.impl
 
-import levsha.{RenderContext, XmlNs}
-import levsha.impl.internal.Op._
+import avocet.{RenderContext, XmlNs}
+import avocet.impl.internal.Op._
 
 import scala.annotation.switch
 import scala.collection.mutable

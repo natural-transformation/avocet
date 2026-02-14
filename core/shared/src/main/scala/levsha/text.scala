@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
-import levsha.impl.{TextPrettyPrintingConfig, XhtmlRenderContext}
+import avocet.impl.{TextPrettyPrintingConfig, XhtmlRenderContext}
 
 /**
   * Default template context and dsl
@@ -30,7 +30,7 @@ object text {
     * @example
     * {{{
     * val html = renderHtml {
-    *   'div('class /= "title", "Hello, I'm Levsha!")
+    *   'div('class /= "title", "Hello, I'm Avocet!")
     * }
     * }}}
     */

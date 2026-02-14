@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
-import levsha.Document.{Attr, Empty, Node, Style}
+import avocet.Document.{Attr, Empty, Node, Style}
 
 import scala.language.implicitConversions
 

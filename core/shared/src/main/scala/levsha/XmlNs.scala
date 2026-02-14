@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 import scala.annotation.switch
 
 sealed abstract class XmlNs(val shortcut: String, val uri: String, val code: Byte)

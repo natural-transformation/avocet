@@ -1,7 +1,7 @@
-package levsha
+package avocet
 
-import levsha.impl.DiffRenderContext
-import levsha.impl.DiffRenderContext.DummyChangesPerformer
+import avocet.impl.DiffRenderContext
+import avocet.impl.DiffRenderContext.DummyChangesPerformer
 
 import scala.language.implicitConversions
 
@@ -12,7 +12,7 @@ import scala.language.implicitConversions
   
   import utest.{TestableString, TestableSymbol => _, assert}
   import Change._
-  import levsha.dsl._
+  import avocet.dsl._
   import html._
 
   val tests = this {
@@ -177,7 +177,7 @@ expected: List(setAttr(List(1, 1),class,война,http://www.w3.org/1999/xhtml)
       // `DiffRenderContext.diff` mutates its internal IdBuilder while traversing the document.
       // When the rhs buffer is empty (OpEnd at the root), diff must not underflow the IdBuilder
       // (level 0), otherwise the next render cycle will crash in `openNode()` with:
-      //   java.lang.IndexOutOfBoundsException at levsha.IdBuilder.incId(...)
+      //   java.lang.IndexOutOfBoundsException at avocet.IdBuilder.incId(...)
       //
 
       val renderContext = DiffRenderContext[Nothing]()

@@ -1,6 +1,6 @@
-package levsha
+package avocet
 
-import levsha.impl.DiffRenderContext.ChangesPerformer
+import avocet.impl.DiffRenderContext.ChangesPerformer
 
 import scala.collection.mutable
 import scala.language.implicitConversions

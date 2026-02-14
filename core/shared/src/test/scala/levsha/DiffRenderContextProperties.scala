@@ -1,8 +1,8 @@
-package levsha
+package avocet
 
-import levsha.Change.DiffTestChangesPerformer
-import levsha.impl.DiffRenderContext
-import levsha.impl.DiffRenderContext.DummyChangesPerformer
+import avocet.Change.DiffTestChangesPerformer
+import avocet.impl.DiffRenderContext
+import avocet.impl.DiffRenderContext.DummyChangesPerformer
 import org.scalacheck.{Gen, Properties, _}
 import Ordering.Implicits._
 

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
-import levsha.Document
-import levsha.Document.{Attr, Empty, Node, Style}
-import levsha.RenderContext
+import avocet.Document
+import avocet.Document.{Attr, Empty, Node, Style}
+import avocet.RenderContext
 
 import scala.quoted.*
 import scala.annotation.tailrec
@@ -182,7 +182,7 @@ object DslOptimizerMacro:
     }
 
     val optimized = '{
-      levsha.Document.Node[T]{ rc =>
+      avocet.Document.Node[T]{ rc =>
         ${aux('{rc}, node)}
       }
     }

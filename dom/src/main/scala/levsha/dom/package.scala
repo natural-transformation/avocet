@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
-import levsha.events.{EventId, EventPhase}
-import levsha.impl.DiffRenderContext
+import avocet.events.{EventId, EventPhase}
+import avocet.impl.DiffRenderContext
 import org.scalajs.dom.Element
 import org.scalajs.{dom => browser}
 
 import scala.collection.mutable
-import levsha.events.calculateEventPropagation
+import avocet.events.calculateEventPropagation
 
 import scala.scalajs.js
 

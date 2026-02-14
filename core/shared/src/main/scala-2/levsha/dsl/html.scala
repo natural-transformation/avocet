@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
-import levsha.Document.Attr
-import levsha.XmlNs
+import avocet.Document.Attr
+import avocet.XmlNs
 import XmlNs.{html => ns}
 
 /**
@@ -35,7 +35,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title
     */
   val title: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "title"
   }
@@ -50,7 +50,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style
     */
   val style: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "style"
   }
@@ -66,7 +66,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/cite
     */
   val cite: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "cite"
   }
@@ -81,7 +81,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/span
     */
   val span: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "span"
   }
@@ -97,7 +97,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form
     */
   val form: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "form"
   }
@@ -113,7 +113,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label
     */
   val label: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "label"
   }
@@ -128,7 +128,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary
     */
   val summary: TagDef with AttrDef = new TagDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "summary"
   }
@@ -144,7 +144,7 @@ object html {
     * @see https://developer.mozilla.org/en-US/docs/Web/CSS/background
     */
   val background: StyleDef with AttrDef = new StyleDef with AttrDef {
-    def ns: XmlNs = levsha.XmlNs.html
+    def ns: XmlNs = avocet.XmlNs.html
 
     def name: String = "background"
   }

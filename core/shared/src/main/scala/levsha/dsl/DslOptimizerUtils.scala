@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
 import java.nio.file._
 
@@ -48,18 +48,18 @@ private[dsl] object DslOptimizerUtils {
       }
   
   lazy val unableToSortTagWarningsEnabled =
-    readBooleanProperty("levsha.optimizer.unableToSort.warnings", true)
+    readBooleanProperty("avocet.optimizer.unableToSort.warnings", true)
 
   lazy val unableToSortForceOptimization =
-    readBooleanProperty("levsha.optimizer.unableToSort.forceOptimization", false)
+    readBooleanProperty("avocet.optimizer.unableToSort.forceOptimization", false)
 
   lazy val logUnableToOptimizePath: Option[Path] = {
-    val propName = "levsha.optimizer.logUnableToOptimize"
+    val propName = "avocet.optimizer.logUnableToOptimize"
     sys.props.get(propName)
       .orElse(sys.env.get(propName))
       .fold(Option.empty[Path]) {
         case "false" | "0" | "" => None
-        case "true" | "1" => Some(Paths.get("levsha-unable-to-optimize.csv"))
+        case "true" | "1" => Some(Paths.get("avocet-unable-to-optimize.csv"))
         case path => Some(Paths.get(path))
       }
   }

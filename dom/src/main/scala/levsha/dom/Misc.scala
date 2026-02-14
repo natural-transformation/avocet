@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.dom
+package avocet.dom
 
-import levsha.events.EventPhase
+import avocet.events.EventPhase
 
 /**
   * @author Aleksey Fomkin <aleksey.fomkin@gmail.com>

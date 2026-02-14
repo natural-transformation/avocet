@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package levsha
+package avocet
 
 import scala.collection.mutable
 import java.util

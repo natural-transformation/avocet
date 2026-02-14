@@ -1,8 +1,8 @@
-package levsha.impl
+package avocet.impl
 
-import levsha.{FastId, XmlNs}
-import levsha.impl.DiffRenderContext.ChangesPerformer
-import levsha.impl.internal.StringHelper.appendFromSource
+import avocet.{FastId, XmlNs}
+import avocet.impl.DiffRenderContext.ChangesPerformer
+import avocet.impl.internal.StringHelper.appendFromSource
 
 import java.nio.{ByteBuffer, CharBuffer}
 import java.nio.charset.StandardCharsets

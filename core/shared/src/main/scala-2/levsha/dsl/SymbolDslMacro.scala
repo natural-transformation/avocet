@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
-import levsha.Document
+import avocet.Document
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
@@ -65,7 +65,7 @@ final class SymbolDslMacro(val c: blackbox.Context) {
     val (nodeXmlNs, nodeName) = unfoldQualifiedName(c.prefix.tree)
 
     q"""
-      levsha.Document.Node.apply[$MT] { rc =>
+      avocet.Document.Node.apply[$MT] { rc =>
         rc.openNode($nodeXmlNs, $nodeName)
         ..$ops
         rc.closeNode($nodeName)
@@ -78,7 +78,7 @@ final class SymbolDslMacro(val c: blackbox.Context) {
     val (xmlNs, attr) = unfoldQualifiedName(c.prefix.tree)
 
     q"""
-      levsha.Document.Attr.apply[$MT] { rc =>
+      avocet.Document.Attr.apply[$MT] { rc =>
         rc.setAttr($xmlNs, $attr, $value)
       }
     """
@@ -89,8 +89,8 @@ final class SymbolDslMacro(val c: blackbox.Context) {
     val (xmlNs, attr) = unfoldQualifiedName(c.prefix.tree)
 
     q"""
-      $value.fold[levsha.Document.Attr[Nothing]](levsha.Document.Empty) { value =>
-        levsha.Document.Attr.apply[$MT] { rc =>
+      $value.fold[avocet.Document.Attr[Nothing]](avocet.Document.Empty) { value =>
+        avocet.Document.Attr.apply[$MT] { rc =>
           rc.setAttr($xmlNs, $attr, value)
         }
       }
@@ -99,7 +99,7 @@ final class SymbolDslMacro(val c: blackbox.Context) {
 
   def xmlNsCreateQualifiedName(symbol: Tree): Tree = {
     val q"$_(${rawName: Tree})" = c.prefix.tree
-    q"levsha.QualifiedName($rawName, $symbol)"
+    q"avocet.QualifiedName($rawName, $symbol)"
   }
 
   // Utils
@@ -108,7 +108,7 @@ final class SymbolDslMacro(val c: blackbox.Context) {
     case Apply(Select(_, TermName("QualifiedNameOps")), Typed(Apply(_, List(xmlNs, rawName)), _) :: Nil) =>
       (xmlNs, toKebab(rawName))
     case _ @ q"$_(${rawName: Tree})" =>
-      (q"levsha.XmlNs.html", toKebab(rawName))
+      (q"avocet.XmlNs.html", toKebab(rawName))
   }
 
   /**  Converts symbol 'camelCase to "kebab-case" */
@@ -123,8 +123,8 @@ final class SymbolDslMacro(val c: blackbox.Context) {
     // Basic optimizations
     case Block(body, extractOpenNode(xs)) => q"..$body; ..$xs"
     case Select(_, TermName("void")) => EmptyTree
-    case Typed(q"levsha.Document.Attr.apply[$t] { rc => rc.setAttr($ns, $k, $v) }", _) => q"rc.setAttr($ns, $k, $v)"
-    case q"levsha.Document.Attr.apply[$t] { rc => rc.setAttr($ns, $k, $v) }" => q"rc.setAttr($ns, $k, $v)"
+    case Typed(q"avocet.Document.Attr.apply[$t] { rc => rc.setAttr($ns, $k, $v) }", _) => q"rc.setAttr($ns, $k, $v)"
+    case q"avocet.Document.Attr.apply[$t] { rc => rc.setAttr($ns, $k, $v) }" => q"rc.setAttr($ns, $k, $v)"
     case extractOpenNode(xs) => q"..$xs"
     case extractConverter("stringToNode", value) => q"rc.addTextNode($value)"
     case extractConverter("miscToNode", value) => q"rc.addMisc($value)"
@@ -177,9 +177,9 @@ final class SymbolDslMacro(val c: blackbox.Context) {
 
   object extractOpenNode {
     def unapply(tree: Tree): Option[Seq[Tree]] = tree match {
-      case q"levsha.Document.Node.apply[$t] { rc => ..${ops: Seq[Tree]} }" =>
+      case q"avocet.Document.Node.apply[$t] { rc => ..${ops: Seq[Tree]} }" =>
         Some(ops.map(cleanIdents(List("rc"), _)))
-      case Typed(q"levsha.Document.Node.apply[$t] { rc => ..${ops: Seq[Tree]} }", _) =>
+      case Typed(q"avocet.Document.Node.apply[$t] { rc => ..${ops: Seq[Tree]} }", _) =>
         Some(ops.map(cleanIdents(List("rc"), _)))
       case _ => None
     }
@@ -199,7 +199,7 @@ final class SymbolDslMacro(val c: blackbox.Context) {
   }
 
   private val notOptimizedWarningsEnabled = {
-    val propName = "levsha.macros.notOptimizedWarnings"
+    val propName = "avocet.macros.notOptimizedWarnings"
     sys.props.get(propName)
       .orElse(sys.env.get(propName))
       .fold(false)(x => if (x == "true") true else false)

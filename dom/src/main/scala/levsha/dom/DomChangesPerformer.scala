@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package levsha.dom
+package avocet.dom
 
-import levsha.{FastId, Id, XmlNs}
-import levsha.impl.DiffRenderContext.ChangesPerformer
+import avocet.{FastId, Id, XmlNs}
+import avocet.impl.DiffRenderContext.ChangesPerformer
 import org.scalajs.dom.raw.HTMLElement
 import org.scalajs.dom.{Element, Node}
 import org.scalajs.{dom => browserDom}

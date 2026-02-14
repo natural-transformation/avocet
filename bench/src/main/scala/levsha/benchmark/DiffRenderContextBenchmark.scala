@@ -1,10 +1,10 @@
-package levsha.benchmark
+package avocet.benchmark
 
 import org.openjdk.jmh.annotations.{Benchmark, BenchmarkMode, Level, Mode, Scope, Setup, State}
-import levsha.impl.{DiffRenderContext, TextReportChangesPerformer}
-import levsha.dsl._
-import levsha.dsl.html._
-import levsha.impl.DiffRenderContext.DummyChangesPerformer
+import avocet.impl.{DiffRenderContext, TextReportChangesPerformer}
+import avocet.dsl._
+import avocet.dsl.html._
+import avocet.impl.DiffRenderContext.DummyChangesPerformer
 
 /**
   * @author Aleksey Fomkin <aleksey.fomkin@gmail.com>

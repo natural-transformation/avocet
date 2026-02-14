@@ -1,9 +1,9 @@
-package levsha
+package avocet
 
-import levsha.Document.Node
-import levsha.impl.TextPrettyPrintingConfig
-import levsha.text._
-import levsha.dsl.SymbolDsl
+import avocet.Document.Node
+import avocet.impl.TextPrettyPrintingConfig
+import avocet.text._
+import avocet.dsl.SymbolDsl
 
 object SymbolDslTest extends utest.TestSuite {
 

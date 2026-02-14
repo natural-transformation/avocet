@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package levsha.dsl
+package avocet.dsl
 
-import levsha.{Document, QualifiedName, XmlNs}
+import avocet.{Document, QualifiedName, XmlNs}
 
 import scala.language.experimental.macros
 import scala.language.implicitConversions

@@ -1,4 +1,4 @@
-package levsha.impl
+package avocet.impl
 
 import java.nio.{ByteBuffer}
 import scala.util.hashing.MurmurHash3

@@ -1,21 +1,21 @@
-# Levsha
+# Avocet
 
-Levsha is a fast HTML template engine and eDSL for Scala 2.12, 2.13 and Scala 3. Optimized templates works without additional memory allocation. 
-Levsha supports changeset inference, which allows to use it as virtual-dom-like middleware. 
+Avocet is a fast HTML template engine and eDSL for Scala 2.12, 2.13 and Scala 3. Optimized templates works without additional memory allocation. 
+Avocet supports changeset inference, which allows to use it as virtual-dom-like middleware. 
 
 ## Static rendering
 
-You can use Levsha as a static HTML renderer.
+You can use Avocet as a static HTML renderer.
 
 ```scala
 // build.sbt
-libraryDependencies += "com.natural-transformation" %% "levsha-core" % "1.6.0"
+libraryDependencies += "com.natural-transformation" %% "avocet-core" % "1.6.0"
 ```
 
 ```scala
 // In your code
-import levsha.text.renderHtml
-import levsha.dsl._
+import avocet.text.renderHtml
+import avocet.dsl._
 import html._
 
 val features = Seq("Very fast", "Memory-effective")
@@ -26,7 +26,7 @@ val html = renderHtml {
       div(
         clazz := "title",
         backgroundColor @= "red", 
-        "Hello, I'm Levsha!"
+        "Hello, I'm Avocet!"
       ),
       ul(clazz := "list",
         features map { feature =>
@@ -42,7 +42,7 @@ println(html)
 
 ```html
 <body>
-  <div style="background-color: red" class="title">Hello, I'm Levsha!</div>
+  <div style="background-color: red" class="title">Hello, I'm Avocet!</div>
   <ul class="list">
     <li class="item">Very fast</li>
     <li class="item">Memory-effective</li>
@@ -52,18 +52,18 @@ println(html)
 
 #### Benchmarks
 
-Benchmarks show that Levsha is really fast. Unlike Twirl, 
-Levsha's performance does not depend on template complexity.
+Benchmarks show that Avocet is really fast. Unlike Twirl, 
+Avocet's performance does not depend on template complexity.
 
 | Test                  | Engine        | Ops/s        |
 | --------------------- |:--------------| ------------:|
-| simpleHtml            | levsha        | 1336693,499  |
+| simpleHtml            | avocet        | 1336693,499  |
 | simpleHtml            | scalatags     |  533740,566  |
 | simpleHtml            | twirl         | 5950436,854  |
-| withConditionAndLoop  | levsha        | 1299646,768  |
+| withConditionAndLoop  | avocet        | 1299646,768  |
 | withConditionAndLoop  | scalatags     | 531345,430   |
 | withConditionAndLoop  | twirl         | 239537,158   |
-| withVariables         | levsha        | 1140298,804  |
+| withVariables         | avocet        | 1140298,804  |
 | withVariables         | scalatags     | 483508,457   |
 | withVariables         | twirl         | 2146419,329  |
 
@@ -75,22 +75,22 @@ bench/jmh:run .StaticRenderingComparision
 
 ## As a virtual DOM
 
-Levsha can be used as virtual-DOM-like middleware. Unlike other popular 
-virtual DOM solutions, Levsha doesn't allocate additional memory for construction
+Avocet can be used as virtual-DOM-like middleware. Unlike other popular 
+virtual DOM solutions, Avocet doesn't allocate additional memory for construction
 of a new virtual DOM copy. Also it does not allocate memory in changes inferring phase.
-Levsha's memory usage is constant.
+Avocet's memory usage is constant.
 
 ```scala
 // build.sbt
-libraryDependencies += "com.natural-transformation" %%% "levsha-dom" % "1.6.0"
+libraryDependencies += "com.natural-transformation" %%% "avocet-dom" % "1.6.0"
 ```
 
 ```scala
 // In your code
 import org.scalajs.dom._
-import levsha.dom.render
-import levsha.dom.event
-import levsha.dsl._
+import avocet.dom.render
+import avocet.dom.event
+import avocet.dsl._
 import html._
 
 case class Todo(id: String, text: String, done: Boolean)
@@ -141,7 +141,7 @@ def renderTodos(todos: Seq[Todo]): Unit = render(document.body) {
 }
 
 val todos = Seq(
-  Todo("1", "Start use Levsha", done = false),
+  Todo("1", "Start use Avocet", done = false),
   Todo("2", "Lean back and have rest", done = false)
 )
 
@@ -150,27 +150,27 @@ renderTodos(todos)
 
 ## Design
 
-Levsha is a small core engine for building and diffing HTML-like trees in Scala. The key idea is: **a template is a function that writes rendering operations into a render context**. Depending on the render context implementation, those operations become either:
+Avocet is a small core engine for building and diffing HTML-like trees in Scala. The key idea is: **a template is a function that writes rendering operations into a render context**. Depending on the render context implementation, those operations become either:
 
 - an **HTML string** (static rendering), or
 - a compact **byte-buffer encoded tree** that can be **diffed** to infer changes (virtual-DOM-like).
 
 ### Modules
 
-- **`levsha-core`**: DSL + optimizer + render contexts (including `DiffRenderContext`)
-- **`levsha-events`**: shared event/id model used by integrations
-- **`levsha-dom`**: Scala.js DOM backend that applies diffs to the browser DOM
+- **`avocet-core`**: DSL + optimizer + render contexts (including `DiffRenderContext`)
+- **`avocet-events`**: shared event/id model used by integrations
+- **`avocet-dom`**: Scala.js DOM backend that applies diffs to the browser DOM
 
 ```mermaid
 flowchart LR
-  Core[levsha-core<br/>DSL + optimizer + DiffRenderContext] --> Dom[levsha-dom<br/>apply changes to browser DOM]
-  Events[levsha-events<br/>ids + event model] --> Dom
+  Core[avocet-core<br/>DSL + optimizer + DiffRenderContext] --> Dom[avocet-dom<br/>apply changes to browser DOM]
+  Events[avocet-events<br/>ids + event model] --> Dom
   Core --> Events
 ```
 
 ### The render pipeline
 
-At runtime, a Levsha template is a `Document[M]` (usually created via the DSL as `Node[M]`, `Attr[M]`, `Style[M]`). Applying a document means calling methods on a `RenderContext`:
+At runtime, a Avocet template is a `Document[M]` (usually created via the DSL as `Node[M]`, `Attr[M]`, `Style[M]`). Applying a document means calling methods on a `RenderContext`:
 
 - `openNode(XmlNs, tag)`
 - `setAttr(XmlNs, name, value)`
@@ -181,7 +181,7 @@ At runtime, a Levsha template is a `Document[M]` (usually created via the DSL as
 
 ```mermaid
 flowchart TD
-  State["Application state"] --> Doc["Document[M]<br/>(Levsha template)"]
+  State["Application state"] --> Doc["Document[M]<br/>(Avocet template)"]
   Doc --> RC["RenderContext"]
   RC -->|text.renderHtml| Html["HTML string"]
   RC -->|DiffRenderContext| Buf["ByteBuffers<br/>lhs/rhs"]
@@ -220,7 +220,7 @@ sequenceDiagram
 
 ### `addMisc` as an integration hook
 
-`addMisc(value)` attaches an out-of-band payload to the **current element id**. Integrations (eg frameworks built on Levsha) use it to collect things like:
+`addMisc(value)` attaches an out-of-band payload to the **current element id**. Integrations (eg frameworks built on Avocet) use it to collect things like:
 
 - event handlers (keyed by element id + event type)
 - element ids for imperative access
@@ -228,7 +228,7 @@ sequenceDiagram
 
 ## Memory allocation model explanation
 
-As noted below Levsha does not make _additional_
+As noted below Avocet does not make _additional_
 memory allocations if template optimized. It is
 possible because optimized template, in compile-time
 rewrites into calls of `RenderContext` methods
@@ -265,8 +265,8 @@ Node { renderContext =>
 In turn, `RenderContext` (namely `DiffRenderContext` implementation)
 saves instructions in `ByteBuffer` to infer changes in the future.
 
-Of course, Levsha optimizer does not cover all cases.
-When optimization can't be performed Levsha just 
+Of course, Avocet optimizer does not cover all cases.
+When optimization can't be performed Avocet just 
 applies current `RenderContext` to the unoptimized node.
 
 ```scala
@@ -298,7 +298,7 @@ Node { renderContext =>
 }
 ```
 
-When you write your Levsha templates, keep in 
+When you write your Avocet templates, keep in 
 your mind this list of optimizations:
 
 1. Nodes and attrs in branches of `if` expression will be moved to current `RenderContext`
@@ -346,9 +346,9 @@ $ sbt -Doption=value
 
 Option | Description | Possible values | Default
 --- | --- | --- | ---
-`levsha.optimizer.logUnableToOptimize` | Write positions of unoptimized parts of code to a file. | true/false or file name | false
-`levsha.optimizer.unableToSort.forceOptimization` | If tag node content couldn't be sorted in compile time, optimizer will keep the code unoptimized (so content will be sorted in runtime). You can force optimizer to ignore unspecified Documents (that couldn't be sorted) and optimize anyway, but keep in mind that node content should be ordered (styles, attrs, nodes). | true/false | false
-`levsha.optimizer.unableToSort.warnings` | Warns that optimizer can't sort tag content when optimization is forced. | true/false | true
+`avocet.optimizer.logUnableToOptimize` | Write positions of unoptimized parts of code to a file. | true/false or file name | false
+`avocet.optimizer.unableToSort.forceOptimization` | If tag node content couldn't be sorted in compile time, optimizer will keep the code unoptimized (so content will be sorted in runtime). You can force optimizer to ignore unspecified Documents (that couldn't be sorted) and optimize anyway, but keep in mind that node content should be ordered (styles, attrs, nodes). | true/false | false
+`avocet.optimizer.unableToSort.warnings` | Warns that optimizer can't sort tag content when optimization is forced. | true/false | true
  
 
 ## Worthy to note

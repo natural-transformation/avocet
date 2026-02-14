@@ -4,12 +4,12 @@ import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
 val org = "com.natural-transformation"
 
 val GitHubOwner = "natural-transformation"
-val GitHubRepo  = "levsha"
+val GitHubRepo  = "avocet"
 val GitHubEmail = "zli@natural-transformation.com"
 
 def releaseVersion: String = sys.env.getOrElse("RELEASE_VERSION", "")
 def isRelease: Boolean     = releaseVersion != ""
-val BaseVersion: String    = "1.6.2"
+val BaseVersion: String    = "1.0.0"
 def publishVersion: String = if (isRelease) releaseVersion else s"$BaseVersion-SNAPSHOT"
 
 // Keep build-wide `version` in sync with the version we actually publish.
@@ -132,7 +132,7 @@ val publishSettings = Seq(
   licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
   headerLicense := Some(HeaderLicense.ALv2("2017-2020", "Aleksey Fomkin")),
   excludeFilter.in(headerSources) := HiddenFileFilter || "IntStringMap.scala" || "StringSet.scala",
-  // This fork is published from https://github.com/natural-transformation/levsha
+  // This fork is published from https://github.com/natural-transformation/avocet
   sonatypeProjectHosting := Some(GitHubHosting(GitHubOwner, GitHubRepo, GitHubEmail))
 )
 
@@ -209,7 +209,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(crossVersionSettings:_*)
   .settings(publishSettings: _*)
   .settings(
-    normalizedName := "levsha-core",
+    normalizedName := "avocet-core",
     libraryDependencies ++= (
       CrossVersion.partialVersion(scalaVersion.value) match {
         case Some((2, _)) =>
@@ -229,7 +229,7 @@ lazy val events = crossProject(JSPlatform, JVMPlatform)
   .settings(commonSettings: _*)
   .settings(crossVersionSettings:_*)
   .settings(publishSettings: _*)
-  .settings(normalizedName := "levsha-events")
+  .settings(normalizedName := "avocet-events")
   .dependsOn(core)
 
 lazy val eventsJS = events.js
@@ -245,7 +245,7 @@ lazy val dom = project
   .dependsOn(coreJS)
   .dependsOn(eventsJS)
   .settings(
-    normalizedName := "levsha-dom",
+    normalizedName := "avocet-dom",
     //scalaJSUseMainModuleInitializer := true,
     libraryDependencies ++= Seq(
       ("org.scala-js" %%% "scalajs-dom" % "1.1.0").cross(CrossVersion.for3Use2_13)
@@ -259,7 +259,7 @@ lazy val bench = project
   .settings(dontPublishSettings: _*)
   .dependsOn(coreJVM)
   .settings(
-    normalizedName := "levsha-bench",
+    normalizedName := "avocet-bench",
     libraryDependencies ++= Seq(
       ("com.lihaoyi" %% "scalatags" % "0.9.4").cross(CrossVersion.for3Use2_13)
     )
@@ -270,7 +270,7 @@ lazy val root = project
   .settings(commonSettings:_*)
   .settings(crossVersionSettings:_*)
   .settings(dontPublishSettings:_*  )
-  .settings(normalizedName := "levsha")
+  .settings(normalizedName := "avocet")
   .aggregate(
     coreJS, coreJVM,
     eventsJS, eventsJVM,

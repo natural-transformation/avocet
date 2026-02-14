@@ -1,4 +1,4 @@
-package levsha.impl.internal
+package avocet.impl.internal
 
 import java.nio.ByteBuffer
 import scala.collection.mutable
