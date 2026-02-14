@@ -1,7 +1,13 @@
+<p align="center">
+  <img src="avocet.svg" alt="Avocet logo" width="200" />
+</p>
+
 # Avocet
 
-Avocet is a fast HTML template engine and eDSL for Scala 2.12, 2.13 and Scala 3. Optimized templates works without additional memory allocation. 
-Avocet supports changeset inference, which allows to use it as virtual-dom-like middleware. 
+Avocet is a fast HTML template engine and eDSL for Scala 3. Optimized templates work without additional memory allocation.
+Avocet supports changeset inference, which allows to use it as virtual-dom-like middleware.
+
+**Requirements:** Scala 3.3+ and JDK 21+.
 
 ## Static rendering
 
@@ -9,7 +15,7 @@ You can use Avocet as a static HTML renderer.
 
 ```scala
 // build.sbt
-libraryDependencies += "com.natural-transformation" %% "avocet-core" % "1.6.0"
+libraryDependencies += "com.natural-transformation" %% "avocet-core" % "1.0.0"
 ```
 
 ```scala
@@ -25,7 +31,7 @@ val html = renderHtml {
     body(
       div(
         clazz := "title",
-        backgroundColor @= "red", 
+        backgroundColor @= "red",
         "Hello, I'm Avocet!"
       ),
       ul(clazz := "list",
@@ -52,7 +58,7 @@ println(html)
 
 #### Benchmarks
 
-Benchmarks show that Avocet is really fast. Unlike Twirl, 
+Benchmarks show that Avocet is really fast. Unlike Twirl,
 Avocet's performance does not depend on template complexity.
 
 | Test                  | Engine        | Ops/s        |
@@ -70,19 +76,19 @@ Avocet's performance does not depend on template complexity.
 In your sbt shell.
 
 ```
-bench/jmh:run .StaticRenderingComparision
+bench / Jmh / run .StaticRenderingComparision
 ```
 
 ## As a virtual DOM
 
-Avocet can be used as virtual-DOM-like middleware. Unlike other popular 
+Avocet can be used as virtual-DOM-like middleware. Unlike other popular
 virtual DOM solutions, Avocet doesn't allocate additional memory for construction
 of a new virtual DOM copy. Also it does not allocate memory in changes inferring phase.
 Avocet's memory usage is constant.
 
 ```scala
 // build.sbt
-libraryDependencies += "com.natural-transformation" %%% "avocet-dom" % "1.6.0"
+libraryDependencies += "com.natural-transformation" %%% "avocet-dom" % "1.0.0"
 ```
 
 ```scala
@@ -116,7 +122,7 @@ def onTodoClick(todo: Todo) = {
       todos.indexOf(todo),
       todo.copy(done = !todo.done)
     )
-  ) 
+  )
 }
 
 def renderTodos(todos: Seq[Todo]): Unit = render(document.body) {
@@ -170,7 +176,7 @@ flowchart LR
 
 ### The render pipeline
 
-At runtime, a Avocet template is a `Document[M]` (usually created via the DSL as `Node[M]`, `Attr[M]`, `Style[M]`). Applying a document means calling methods on a `RenderContext`:
+At runtime, an Avocet template is a `Document[M]` (usually created via the DSL as `Node[M]`, `Attr[M]`, `Style[M]`). Applying a document means calling methods on a `RenderContext`:
 
 - `openNode(XmlNs, tag)`
 - `setAttr(XmlNs, name, value)`
@@ -232,14 +238,14 @@ As noted below Avocet does not make _additional_
 memory allocations if template optimized. It is
 possible because optimized template, in compile-time
 rewrites into calls of `RenderContext` methods
-(unlike other template engines which represent 
+(unlike other template engines which represent
 their templates as AST on-heap).
 
 For example,
 
 ```scala
 optimize {
-  div(clazz := "content", 
+  div(clazz := "content",
     h1("Hello world"),
     p("Lorem ipsum dolor")
   )
@@ -266,13 +272,13 @@ In turn, `RenderContext` (namely `DiffRenderContext` implementation)
 saves instructions in `ByteBuffer` to infer changes in the future.
 
 Of course, Avocet optimizer does not cover all cases.
-When optimization can't be performed Avocet just 
+When optimization can't be performed Avocet just
 applies current `RenderContext` to the unoptimized node.
 
 ```scala
 optimize {
   ul(
-    Seq(1, 2, 3, 4, 5, 6, 7).collect { 
+    Seq(1, 2, 3, 4, 5, 6, 7).collect {
       case x if x % 2 == 0 => li(x.toString)
     }
   )
@@ -284,7 +290,7 @@ Node { renderContext =>
   renderContext.openNode(XmlNs.html, "ul")
   Seq(1, 2, 3, 4, 5, 6, 7)
     .collect {
-      case x if x % 2 == 0 => 
+      case x if x % 2 == 0 =>
         Node { renderContext =>
           renderContext.openNode(XmlNs.html, "li")
           renderContext.addTextNode(x.toString)
@@ -298,7 +304,7 @@ Node { renderContext =>
 }
 ```
 
-When you write your Avocet templates, keep in 
+When you write your Avocet templates, keep in
 your mind this list of optimizations:
 
 1. Nodes and attrs in branches of `if` expression will be moved to current `RenderContext`
@@ -349,8 +355,13 @@ Option | Description | Possible values | Default
 `avocet.optimizer.logUnableToOptimize` | Write positions of unoptimized parts of code to a file. | true/false or file name | false
 `avocet.optimizer.unableToSort.forceOptimization` | If tag node content couldn't be sorted in compile time, optimizer will keep the code unoptimized (so content will be sorted in runtime). You can force optimizer to ignore unspecified Documents (that couldn't be sorted) and optimize anyway, but keep in mind that node content should be ordered (styles, attrs, nodes). | true/false | false
 `avocet.optimizer.unableToSort.warnings` | Warns that optimizer can't sort tag content when optimization is forced. | true/false | true
- 
 
-## Worthy to note
+## Project history
 
-1. [The Tale of Cross-eyed Lefty from Tula and the Steel Flea](https://en.wikipedia.org/wiki/The_Tale_of_Cross-eyed_Lefty_from_Tula_and_the_Steel_Flea)
+Avocet is based on [Levsha](https://github.com/natural-transformation/levsha), originally created by Aleksey Fomkin. Starting from version 1.0.0, the project has been renamed to Avocet with the following breaking changes:
+
+- **Scala 3 only** — Scala 2.12 and 2.13 support has been dropped.
+- **JDK 21+** — minimum Java version raised from 8 to 21.
+- **Symbol DSL removed** — the deprecated Scala 2 Symbol-based DSL (`'div(...)`) is gone. Use the standard DSL (`div(...)`) instead.
+
+For the previous version with Scala 2 support, see [natural-transformation/levsha](https://github.com/natural-transformation/levsha).
