@@ -131,7 +131,7 @@ val publishSettings = Seq(
   publishMavenStyle := true,
   licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
   headerLicense := Some(HeaderLicense.ALv2("2017-2020", "Aleksey Fomkin")),
-  excludeFilter.in(headerSources) := HiddenFileFilter || "IntStringMap.scala" || "StringSet.scala",
+  headerSources / excludeFilter := HiddenFileFilter || "IntStringMap.scala" || "StringSet.scala",
   // This fork is published from https://github.com/natural-transformation/avocet
   sonatypeProjectHosting := Some(GitHubHosting(GitHubOwner, GitHubRepo, GitHubEmail))
 )
@@ -139,8 +139,7 @@ val publishSettings = Seq(
 val dontPublishSettings = Seq(
   publish := {},
   publishTo := unusedRepo,
-  publishArtifact := false,
-  headerLicense := None
+  publishArtifact := false
 )
 
 def additionalUnmanagedSources(cfg: Configuration) = Def.setting {
@@ -156,7 +155,6 @@ def additionalUnmanagedSources(cfg: Configuration) = Def.setting {
   }
   val versionSpecificDirNames = CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((3, _))  => Seq("scala-3")
-    case Some((2, _))  => Seq("scala-2")
     case _             => Seq()
   }
   val origSourceDir = (cfg / sourceDirectory).value
@@ -176,14 +174,13 @@ def additionalUnmanagedSources(cfg: Configuration) = Def.setting {
 }
 
 val crossVersionSettings = Seq(
-  crossScalaVersions := Seq("2.13.8", "2.12.15", "3.1.3"),
-  scalaVersion := "3.1.3"
+  crossScalaVersions := Seq("3.3.7"),
+  scalaVersion := "3.3.7"
 )
 
 val commonSettings = Seq(
-  scalaVersion := "2.13.6",
+  scalaVersion := "3.3.7",
   organization := org,
-  git.useGitDescribe := true,
   version      := publishVersion,
   scalacOptions ++= Seq(
     "-deprecation",
@@ -209,14 +206,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(crossVersionSettings:_*)
   .settings(publishSettings: _*)
   .settings(
-    normalizedName := "avocet-core",
-    libraryDependencies ++= (
-      CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, _)) =>
-          List("org.scala-lang" % "scala-compiler" % scalaVersion.value % "provided")
-        case _                       => Nil
-      }
-    )
+    normalizedName := "avocet-core"
   )
 
 lazy val coreJS = core.js

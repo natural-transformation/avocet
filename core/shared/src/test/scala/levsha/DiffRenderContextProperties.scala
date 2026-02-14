@@ -224,7 +224,7 @@ object ChangesTrial {
   }
 
   private def makeUnflat(flatDoc: FlatDoc) = {
-    val (1 :: Nil, root) :: children = flatDoc.sortBy(_._1.toIterable)
+    val (1 :: Nil, root) :: children = (flatDoc.sortBy(_._1.toList): @unchecked)
     def findChildren(id: List[Int]): List[TestDoc] = {
       def checkId(childId: List[Int]) =
         childId.length == (id.length + 1) && childId.startsWith(id)
@@ -300,9 +300,9 @@ object ChangesTrial {
         }
         intents <- Gen.sequence(intentGens)
       } yield {
-        import collection.JavaConverters._
+        import scala.jdk.CollectionConverters._
         val xs = intents.asScala
-        xs.sortBy(_.id.toIterable).foldLeft(List.empty[Intent]) {
+        xs.sortBy(_.id.toList).foldLeft(List.empty[Intent]) {
           case (acc, intent) if !acc.exists(x => intent.id.startsWith(x.id)) =>
             intent :: acc
           case (acc, _) => acc
@@ -334,7 +334,7 @@ object ChangesTrial {
           case Intent.Append(id, doc) =>
             val nextId = flatDocument
               .filter { case (i, _) => i.length == id.length + 1 && i.startsWith(id) }
-              .sortBy(_._1.toIterable)
+              .sortBy(_._1.toList)
               .lastOption
               .map(_._1.last + 1)
               .getOrElse(1)
@@ -368,8 +368,8 @@ object ChangesTrial {
           .distinct
       }
 
-      val updatedFlatDocument = changes.foldLeft(flatDocument.toMap) {
-        case (acc, Change.create(id, name, _)) =>
+      val updatedFlatDocument = changes.foldLeft(flatDocument.toMap) { (acc, change) => change match {
+        case Change.create(id, name, _) =>
           acc
             .get(id)
             .fold(acc) {
@@ -377,40 +377,41 @@ object ChangesTrial {
               case _ => acc.filter(!_._1.startsWith(id))
             }
             .updated(id, Element(name, Map.empty, Map.empty, Nil))
-        case (acc, Change.createText(id, text)) =>
+        case Change.createText(id, text) =>
           acc
             .filter(!_._1.startsWith(id))
             .updated(id, Text(text))
-        case (acc, Change.remove(id)) => acc.filter(!_._1.startsWith(id))
-        case (acc, Change.removeAttr(id, _, attr)) if acc.contains(id) =>
+        case Change.remove(id) => acc.filter(!_._1.startsWith(id))
+        case Change.removeAttr(id, _, attr) if acc.contains(id) =>
           acc(id) match {
             case _: Text => acc
             case el: Element =>
               val updatedEl = el.copy(attrs = el.attrs - attr)
               acc + (id -> updatedEl)
           }
-        case (acc, Change.removeStyle(id, style)) if acc.contains(id) =>
+        case Change.removeStyle(id, style) if acc.contains(id) =>
           acc(id) match {
             case _: Text => acc
             case el: Element =>
               val updatedEl = el.copy(styles = el.styles - style)
               acc + (id -> updatedEl)
           }
-        case (acc, Change.setAttr(id, name, _, value)) if acc.contains(id) =>
+        case Change.setAttr(id, name, _, value) if acc.contains(id) =>
           acc(id) match {
             case _: Text => acc
             case el: Element =>
               val updatedEl = el.copy(attrs = el.attrs + (name -> value))
               acc + (id -> updatedEl)
           }
-        case (acc, Change.setStyle(id, name, value)) if acc.contains(id) =>
+        case Change.setStyle(id, name, value) if acc.contains(id) =>
           acc(id) match {
             case _: Text => acc
             case el: Element =>
               val updatedEl = el.copy(styles = el.styles + (name -> value))
               acc + (id -> updatedEl)
           }
-      }
+        case _ => acc
+      }}
       ChangesTrial(
         originalDocument,
         makeUnflat(updatedFlatDocument.toList),

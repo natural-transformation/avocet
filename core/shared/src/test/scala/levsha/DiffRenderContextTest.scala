@@ -10,12 +10,12 @@ import scala.language.implicitConversions
   */
   object DiffRenderContextTest extends utest.TestSuite {
   
-  import utest.{TestableString, TestableSymbol => _, assert}
+  import utest.{Tests, TestableString, TestableSymbol => _, assert}
   import Change._
   import avocet.dsl._
   import html._
 
-  val tests = this {
+  val tests = Tests {
 
     "should replace text to node" - {
       val changes = runDiff(

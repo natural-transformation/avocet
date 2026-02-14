@@ -8,7 +8,7 @@ object XhtmlRenderContextTest extends TestSuite {
   import avocet.dsl._
   import avocet.dsl.html._
 
-  val tests = this {
+  val tests = Tests {
     test("text nodes should be escaped") - {
       val rc = new XhtmlRenderContext(TextPrettyPrintingConfig.noPrettyPrinting)
       div("1 < 3 > 2 && \"ha ha ha\" ").apply(rc)

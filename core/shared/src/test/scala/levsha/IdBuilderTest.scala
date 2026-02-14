@@ -7,7 +7,7 @@ object IdBuilderTest extends utest.TestSuite {
 
   import utest._
 
-  val tests = this {
+  val tests = Tests {
     test("IdCounter") - {
       test("should increment id on first level") - {
         val counter = IdBuilder()

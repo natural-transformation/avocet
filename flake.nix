@@ -11,16 +11,15 @@
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       perSystem = { config, self', inputs', pkgs, system, ... }:
       let
-        # Avocet currently cross-builds older Scala versions (2.12/2.13/3),
-        # so we keep the devShell on JDK 17 for maximum compatibility.
-        jdk17-overlay = self: super: {
-          jdk = super.jdk17;
-          jre = super.jdk17;
-          sbt = super.sbt.override { jre = super.jdk17; };
+        # Scala 3 only; target JDK 21+.
+        jdk21-overlay = self: super: {
+          jdk = super.jdk21;
+          jre = super.jdk21;
+          sbt = super.sbt.override { jre = super.jdk21; };
         };
         newPkgs = import nixpkgs {
           inherit system;
-          overlays = [ jdk17-overlay ];
+          overlays = [ jdk21-overlay ];
         };
       in {
         devShells.default = newPkgs.mkShell {

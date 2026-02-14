@@ -11,7 +11,7 @@ object DefaultDslTest extends utest.TestSuite {
 
   def tests = {
     import utest._
-    this {
+    Tests {
       "if (expr) node else void" - {
         val result = renderHtml(ifexpr1(true), TextPrettyPrintingConfig.noPrettyPrinting)
         assert(result == """<div class="hello"></div>""")
