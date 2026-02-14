@@ -61,17 +61,17 @@ println(html)
 Benchmarks show that Avocet is really fast. Unlike Twirl,
 Avocet's performance does not depend on template complexity.
 
-| Test                  | Engine        | Ops/s        |
-| --------------------- |:--------------| ------------:|
-| simpleHtml            | avocet        | 1336693,499  |
-| simpleHtml            | scalatags     |  533740,566  |
-| simpleHtml            | twirl         | 5950436,854  |
-| withConditionAndLoop  | avocet        | 1299646,768  |
-| withConditionAndLoop  | scalatags     | 531345,430   |
-| withConditionAndLoop  | twirl         | 239537,158   |
-| withVariables         | avocet        | 1140298,804  |
-| withVariables         | scalatags     | 483508,457   |
-| withVariables         | twirl         | 2146419,329  |
+| Test                  | Engine        | Ops/s          |
+| --------------------- |:--------------| --------------:|
+| simpleHtml            | avocet        |  1,626,672     |
+| simpleHtml            | scalatags     |  1,604,833     |
+| simpleHtml            | twirl         | 76,749,943     |
+| withConditionAndLoop  | avocet        |  1,720,568     |
+| withConditionAndLoop  | scalatags     |  1,543,942     |
+| withConditionAndLoop  | twirl         |  3,828,345     |
+| withVariables         | avocet        |  1,691,589     |
+| withVariables         | scalatags     |  1,600,567     |
+| withVariables         | twirl         | 19,641,402     |
 
 In your sbt shell.
 

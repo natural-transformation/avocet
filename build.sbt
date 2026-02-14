@@ -251,7 +251,7 @@ lazy val bench = project
   .settings(
     normalizedName := "avocet-bench",
     libraryDependencies ++= Seq(
-      ("com.lihaoyi" %% "scalatags" % "0.9.4").cross(CrossVersion.for3Use2_13)
+      "com.lihaoyi" %% "scalatags" % "0.13.1"
     )
   )
 
