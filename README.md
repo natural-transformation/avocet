@@ -9,6 +9,10 @@ Avocet supports changeset inference, which allows to use it as virtual-dom-like 
 
 **Requirements:** Scala 3.3+ and JDK 21+.
 
+## Documentation
+
+* [Docs](https://natural-transformation.com/open-source/avocet/overview)
+
 ## Static rendering
 
 You can use Avocet as a static HTML renderer.
