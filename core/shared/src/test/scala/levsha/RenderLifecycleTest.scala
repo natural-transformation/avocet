@@ -145,8 +145,8 @@ object RenderLifecycleTest extends TestSuite {
       val outcome = root.render(p(div(), br(span("x")), form(form())))
       val codes = outcome match { case Rejected(e: ValidationException) => e.errors.map(_.code); case _ => Nil }
       import ValidationError.Code._
-      // `form` also closes the paragraph, so it is reported twice: once for the paragraph, once as nested.
-      assert(codes == Seq(ParagraphClosedByBlock, VoidElementChild, ParagraphClosedByBlock, NestedForm))
+      // `div` closes the paragraph once; by the time `form` arrives the parser has no open paragraph, so only the nested form is reported.
+      assert(codes == Seq(ParagraphClosedByBlock, VoidElementChild, NestedForm))
     }
 
     "collect mode attaches the collected errors when the engine throws first" - {

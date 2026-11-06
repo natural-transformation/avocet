@@ -104,6 +104,9 @@ package object dom {
       }
 
     def dispose(): Unit = if (root.state != State.Disposed) {
+      // Eligibility first: a dispose from a rendering callback must not destroy the published view.
+      if (root.state == State.Rendering)
+        throw RenderException.invalidState("avocet.dom: dispose() called while a render is in progress")
       nativeListeners.foreach { case (tpe, listener) =>
         target.removeEventListener(tpe, listener, useCapture = true)
       }
@@ -136,7 +139,10 @@ package object dom {
 
   /** Releases everything Avocet holds for `target`. Safe to call twice. */
   def dispose(target: Element): Unit =
-    roots.remove(target).foreach(_.dispose())
+    roots.get(target).foreach { root =>
+      root.dispose() // throws, leaving the root registered and intact, when a render is in progress
+      roots.remove(target)
+    }
 
   def event(`type`: String, phase: EventPhase = EventPhase.Bubbling)
            (callback: => Any): Misc.Event = {

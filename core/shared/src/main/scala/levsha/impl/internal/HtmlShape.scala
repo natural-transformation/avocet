@@ -35,6 +35,10 @@ private[avocet] object HtmlShape {
   val escapableRawTextElements: Set[String] = Set("textarea", "title")
 
   /** A start tag of one of these inside an open `p` closes the paragraph first. */
+  /** Elements that end the search for an open `p` in button scope (HTML parsing: "has an element in button scope"). */
+  val buttonScopeBoundary: Set[String] =
+    Set("html", "table", "td", "th", "caption", "applet", "marquee", "object", "template", "button")
+
   val closesParagraph: Set[String] = Set(
     "address", "article", "aside", "blockquote", "center", "details", "dialog", "dir", "div", "dl", "fieldset",
     "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "main",

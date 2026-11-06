@@ -191,7 +191,7 @@ object DiffRenderContextRegressionTest extends TestSuite {
         rc.diff(DummyChangesPerformer)
       }
       "invalid initial capacities are rejected" - {
-        for (size <- Seq(0, -1, 3, Int.MinValue))
+        for (size <- Seq(0, 1, -1, 3, Int.MinValue))
           expectCode(RenderException.Code.InvalidArgument)(DiffRenderContext[Nothing](initialBufferSize = size))
       }
       "a tiny initial buffer grows for the active half" - {

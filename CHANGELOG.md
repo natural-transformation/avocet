@@ -73,10 +73,15 @@ in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md).
 
 ### Compatibility
 
-- Source and binary: every M1 API is unchanged; additions only, except
-  `RenderException` losing `final` and the two `avocet.dom` exception
-  types above. `DiffRenderContext`'s 4-argument constructor is new; the
-  old one remains.
+- Source and binary: every M1 API is unchanged. Additions: a 4-argument
+  `DiffRenderContext` constructor and `apply` (with `trimPolicy`); the
+  1.0.0 3-argument constructor and `apply` remain as overloads, so a consumer
+  compiled against 1.0.0 keeps resolving them (the first revision of this
+  change had replaced the factory; a review caught it and a JVM test now
+  checks the legacy signatures). Two deliberate exceptions: `RenderException`
+  loses `final` (so `ValidationException` can extend it), and the
+  `avocet.dom` adapter throws `RenderException` where it threw
+  `IllegalStateException`.
 - Saved buffers: format 2, readable by M1 readers; the stale-buffer change
   only makes snapshots smaller.
 - Wire protocol and bootstrap: unchanged. No new opcodes.

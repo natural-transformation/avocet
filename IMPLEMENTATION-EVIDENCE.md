@@ -366,3 +366,29 @@ recompiled against M2 (whose `apply` gained the `trimPolicy` parameter).
 This is a consumer build-cache effect, not a renderer defect, but it shows
 that an old `avocet-core` jar on the classpath with new Spoonbill classes
 fails at session start; the dependency bump must ship together.
+
+## PR review findings (2026-11-06) and their fixes
+
+Six findings from the review of the first PR revision. All were confirmed
+against the code before changing anything; the fixes and their regressions
+are listed per finding. Tests: `ReviewFixesTest` (JVM and JS),
+`FactoryBinaryCompatTest` (JVM), two new browser-fixture checks.
+
+| Finding | Confirmed cause | Fix | Regression |
+| --- | --- | --- | --- |
+| P1 factory binary break | `DiffRenderContext.apply` went from 3 to 4 parameters; the 1.0.0 JVM method disappeared. Spoonbill recompiled during validation, hiding it. | The 4-parameter `apply` keeps the defaults; the 1.0.0 3-parameter `apply` is back as an overload. Changelog corrected: it claimed "additive". | `FactoryBinaryCompatTest` resolves the legacy JVM signature and `apply$default$1..3` by reflection and renders through it. |
+| P1 `CssValue` resource loading | Blacklist (`url(`, `expression(`, comments) let `image-set("…")`, `src(`, `image(` and others fetch. | Allowlisted grammar: whitespace/commas/slashes, numbers with units, hex colors, identifiers, top-level strings, and only the functions in `CssValue.allowedFunctions`, balanced. | `ReviewFixesTest`: 21 rejected inputs including `image-set`, `-webkit-image-set`, `src`, `image`, `element`, `attr`, nested `url` and `image-set` inside allowed functions; 22 accepted ordinary values. Fixture: rejected loaders and an accepted gradient with no resource entry for the probe host. |
+| P2 optimizer evaluation counts | Typed-key lowerings spliced the receiver three times (boolean key: zero when false); `each`, option and seq lowerings re-spliced a dynamic callback per element; option lowerings spliced the option twice. The old `AttrDef` lowering had the receiver twice. | Receivers bound once (`val k = …`); lambda literals are still inlined, any other callback expression is bound once outside the loop and applied per element; options bound once. | `ReviewFixesTest`: dynamic key/definition factories evaluated 4 times in both forms; a stateful callback factory yields 1,2,3 in both forms; dynamic option/seq and mapper evaluated once each. |
+| P2 reentrant dispose | `dispose(target)` removed the registry entry, listeners and DOM before `RenderRoot.dispose()` rejected the rendering state. | Eligibility checked first (`INVALID_STATE` while rendering); registry entry removed only after a successful dispose. | Fixture: dispose from a rendering callback is rejected, the published view and the root survive, the next render works. |
+| P2 paragraph scope | Only the direct parent was compared with `p`. | Walk the open-element stack to the nearest button-scope boundary (`HtmlShape.buttonScopeBoundary`) or foreign element; a closed `p` is reported once. | `ReviewFixesTest`: `p(span(div))` and `p(span(em(ul(li))))` report; `p(span)` and `p(button(div))` do not; existing `p(ul(li))` still reports once. |
+| P2 capacity 1 | Size 1 passed the power-of-two check; `trim()` and restore seeded growth with `1 / 2 = 0` and looped forever. | Sizes below 2 are rejected; both growth seeds are at least 1. | `ReviewFixesTest`: size 1 rejected; size 2 renders, trims, saves and restores a non-empty baseline. |
+
+Verification of the fixed revision (2026-11-06 13:30): `sbt +test` coreJVM
+164 passed, coreJS 156 passed, dom 4; `domFixture/fastLinkJS` links and the
+browser fixture passes 22 of 22 checks in Chromium 152 (two new checks);
+`bench/compile` passes. Candidate `1.0.0-r1-baeeea2-SNAPSHOT` in the
+Spoonbill worktree after `sbt clean`: `spoonbill/test` 614, `testkit/test`
+19, real-service check PASS in Chromium and WebKit. One existing test
+expectation changed with the paragraph fix (`RenderLifecycleTest`): a
+paragraph closed by `div` is no longer reported a second time for a later
+`form`, which matches the parser.

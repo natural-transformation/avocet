@@ -85,8 +85,8 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
   def this(mc: MiscCallback[M], initialBufferSize: Int, savedBuffer: ByteBuffer) =
     this(mc, initialBufferSize, savedBuffer, TrimPolicy.Manual)
 
-  if ((initialBufferSize <= 0) || ((initialBufferSize & (initialBufferSize - 1)) != 0))
-    throw RenderException.invalidArgument("initialBufferSize should be a positive power of two")
+  if ((initialBufferSize < 2) || ((initialBufferSize & (initialBufferSize - 1)) != 0))
+    throw RenderException.invalidArgument("initialBufferSize should be a power of two of at least 2")
   if (initialBufferSize > MaxBufferSize)
     throw RenderException.invalidArgument(s"initialBufferSize exceeds $MaxBufferSize")
 
@@ -234,7 +234,8 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
     if (lhsFinalized && !lhsStale)
       throw RenderException.invalidState("trim() is only allowed after swap() or reset()")
     val used = rhs.limit().toLong
-    var half = (initialBufferSize / 2).toLong
+    // The growth seed is at least 1 so the loop terminates for every accepted capacity.
+    var half = Math.max(1L, (initialBufferSize / 2).toLong)
     while (half < used * 2) half *= 2
     val newSize = (half * 2).toInt
     if (newSize >= buffer.capacity()) false
@@ -349,7 +350,7 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
       throw RenderException.invalidSavedBuffer("unfinalized lhs with content")
 
     val half = {
-      var h = (initialBufferSize / 2).toLong
+      var h = Math.max(1L, (initialBufferSize / 2).toLong)
       val needed = Math.max(lhsLen, rhsLen).toLong
       while (h < needed) h *= 2
       if (h * 2 > MaxBufferSize) throw RenderException.limit(s"saved buffer exceeds $MaxBufferSize bytes")
@@ -833,6 +834,18 @@ object DiffRenderContext {
   ): DiffRenderContext[MiscType] = {
     new DiffRenderContext[MiscType](onMisc, initialBufferSize, savedBuffer.orNull, trimPolicy)
   }
+
+  /**
+    * The 1.0.0 factory signature, kept for binary compatibility: a consumer
+    * compiled against 1.0.0 calls this JVM method. Source code resolves to
+    * the overload above, which has the defaults.
+    */
+  def apply[MiscType](
+    onMisc: MiscCallback[MiscType],
+    initialBufferSize: Int,
+    savedBuffer: Option[ByteBuffer]
+  ): DiffRenderContext[MiscType] =
+    new DiffRenderContext[MiscType](onMisc, initialBufferSize, savedBuffer.orNull, TrimPolicy.Manual)
 
   /**
     * Fast performer. `id` and `source` are borrowed for the duration of the

@@ -52,6 +52,8 @@ class ValidatingRenderContext[-M] private[avocet] (inner: RenderContext[M], val 
   private val maxDepth = DiffRenderContext.MaxDepth
   // Per-level state; index = depth of the open element (0 = outermost).
   private val names = new Array[String](maxDepth)
+  // A `p` the parser has already closed (reported once) is not closed again by later descendants.
+  private val paragraphClosed = new Array[Boolean](maxDepth)
   private val isHtml = new Array[Boolean](maxDepth)
   // childCounts(level) = children emitted so far at `level`; level 0 is the root level.
   private val childCounts = new Array[Int](maxDepth + 1)
@@ -116,6 +118,7 @@ class ValidatingRenderContext[-M] private[avocet] (inner: RenderContext[M], val 
     lastWasText(depth) = false
     names(depth) = name
     isHtml(depth) = html
+    paragraphClosed(depth) = false
     depth += 1
     childCounts(depth) = 0
     lastWasText(depth) = false
@@ -212,8 +215,14 @@ class ValidatingRenderContext[-M] private[avocet] (inner: RenderContext[M], val 
     else if (HtmlShape.rawTextElements.contains(parent) || HtmlShape.escapableRawTextElements.contains(parent))
       report(Code.RawTextChild, positionOf(level), parent, "element inside a raw text element becomes text")
     if (!childIsHtml) return
-    if (parent == "p" && HtmlShape.closesParagraph.contains(name))
-      report(Code.ParagraphClosedByBlock, positionOf(level), parent, s"<$name> closes the open paragraph")
+    if (HtmlShape.closesParagraph.contains(name)) {
+      // The parser closes a `p` that is open anywhere in button scope, not only a direct parent.
+      val pLevel = paragraphInButtonScope(level)
+      if (pLevel >= 0) {
+        paragraphClosed(pLevel) = true
+        report(Code.ParagraphClosedByBlock, positionOf(pLevel), "p", s"<$name> closes the open paragraph")
+      }
+    }
     if (name == "form" && openForms > 0)
       report(Code.NestedForm, positionOf(level), parent, "form inside a form is ignored by the parser")
     if (name == "a" && openAnchors > 0)
@@ -306,6 +315,22 @@ class ValidatingRenderContext[-M] private[avocet] (inner: RenderContext[M], val 
   private def currentName: String = if (depth == 0) "" else names(depth - 1)
 
   /** Positional id of the node most recently counted at `level` (`1_2_3` style). */
+  /** Level of the nearest open `p` in button scope below `level`, or -1. Foreign elements and scoping elements end the search. */
+  private def paragraphInButtonScope(level: Int): Int = {
+    var j = level
+    var found = -1
+    while (found < 0 && j >= 0) {
+      if (!isHtml(j)) j = -1
+      else {
+        val n = names(j)
+        if (n == "p" && !paragraphClosed(j)) found = j
+        else if (HtmlShape.buttonScopeBoundary.contains(n)) j = -1
+        else j -= 1
+      }
+    }
+    found
+  }
+
   private def positionOf(level: Int): String = {
     val sb = new mutable.StringBuilder()
     var i = 0

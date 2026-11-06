@@ -194,6 +194,15 @@ object DomFixture {
       val clean = container.innerHTML == "" && !debugIsMounted(container) && debugHandlerCount(container) == 0 && debugIndexSize(container) == 0
       (clean && log.isEmpty, s"${html(container)} mounted=${debugIsMounted(container)} log=${log.toList}")
     }
+    check("dispose from a rendering callback is rejected and keeps the published view") {
+      render(container)(div("keep"))
+      val threw =
+        try { render(container)(div(Document.Node[Misc] { _ => dispose(container) }, "x")); false }
+        catch { case _: RenderException => true }
+      val kept = html(container) == "<div>keep</div>" && debugIsMounted(container)
+      val stillWorks = { render(container)(div("next")); html(container) == "<div>next</div>" }
+      (threw && kept && stillWorks, s"threw=$threw kept=$kept ${html(container)}")
+    }
     check("render after dispose mounts from scratch") {
       render(container)(div("again"))
       (html(container) == "<div>again</div>" && debugIndexSize(container) == 2, s"${html(container)} index=${debugIndexSize(container)}")
@@ -238,6 +247,19 @@ object DomFixture {
         try { render(container, Validation.interactiveHtml)(div(p(div("block")), "a", "b")); Nil }
         catch { case e: ValidationException => e.errors.map(_.code.name) }
       (errors == List("PARAGRAPH_CLOSED_BY_BLOCK") && html(container) == before && debugGeneration(container) == 1, s"errors=$errors ${html(container)}")
+    }
+    check("data-safe CSS rejects resource loaders and an accepted gradient makes no request") {
+      val rejected = Seq("image-set(\"https://example.invalid/x.png\" 1x)", "url(https://example.invalid/y.png)", "src(\"x\")")
+        .forall(v => CssValue(v).isEmpty)
+      val backgroundImage = StyleKey.css("background-image")
+      // Own container: a removed style leaves `style=""` behind, which would change later outerHTML checks.
+      val cssContainer = newContainer()
+      render(cssContainer)(div(backgroundImage @= CssValue("linear-gradient(red, blue)").get, "g"))
+      val applied = cssContainer.asInstanceOf[browser.html.Element].style.getPropertyValue("background-image").contains("linear-gradient")
+      dispose(cssContainer)
+      val entries = js.Dynamic.global.performance.getEntriesByType("resource").asInstanceOf[js.Array[js.Dynamic]]
+      val requested = entries.exists(e => e.name.asInstanceOf[String].contains("example.invalid"))
+      (rejected && applied && !requested, s"rejected=$rejected applied=$applied requested=$requested")
     }
     check("a rejected javascript URL never reaches the DOM") {
       val link = CheckedUrl("javascript:alert(1)").fold(CheckedUrl.trusted("#rejected"))(identity)
