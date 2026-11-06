@@ -118,6 +118,29 @@ object ReviewFixesTest extends TestSuite {
       assert(fastCount == 4)
     }
 
+    "optimized collections evaluate the collection before the callback" - {
+      val log = scala.collection.mutable.Buffer.empty[String]
+      var value = 0
+      def coll(tag: String) = { log += s"$tag-coll"; value = 7; List(1) }
+      def cb(tag: String): Int => Document.Node[Nothing] = { log += s"$tag-cb"; val captured = value; _ => li(captured.toString) }
+      def plain = ul(each(coll("p"))(cb("p")), coll("ps").map(cb("ps")))
+      def fast = optimize(ul(each(coll("f"))(cb("f")), coll("fs").map(cb("fs"))))
+      value = 0
+      val plainOps = OpRecorder.record(plain)
+      value = 0
+      val fastOps = OpRecorder.record(fast)
+      assert(plainOps == fastOps)
+      assert(plainOps == Seq("open(html:ul)", "open(html:li)", "text(7)", "close(li)", "open(html:li)", "text(7)", "close(li)", "close(ul)"))
+      assert(log.toList == List("p-coll", "p-cb", "ps-coll", "ps-cb", "f-coll", "f-cb", "fs-coll", "fs-cb"))
+    }
+
+    "CssValue accepts arithmetic inside allowed math functions only" - {
+      Seq("calc(100% + 10px)", "calc(2 * 10px)", "calc((100% - 10px) / 2)", "min(10px, 5% + 2px)", "clamp(1rem, (2vw + 1rem) * 2, 3rem)")
+        .foreach(v => assert(CssValue(v).isDefined))
+      Seq("100% + 10px", "2 * 10px", "(10px)", "calc(url(x) + 1px)", "calc((1px)", "calc(1px))")
+        .foreach(v => assert(CssValue(v).isEmpty))
+    }
+
     "paragraph closed through inline descendants and button scope" - {
       assert(codes(div(p(span(div("x"))))) == Seq(ParagraphClosedByBlock))
       assert(codes(div(p(span(em(ul(li("x"))))))) == Seq(ParagraphClosedByBlock))

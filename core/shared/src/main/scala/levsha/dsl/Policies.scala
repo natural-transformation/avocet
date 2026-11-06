@@ -111,7 +111,7 @@ object CheckedUrl {
   * or `%`; hex colors; identifiers (keywords, custom property names, vendor
   * prefixes); quoted strings at the top level only (font names, `content`);
   * and calls of the functions in [[CssValue.allowedFunctions]] with the same
-  * grammar inside, balanced. Everything else is rejected: in particular every
+  * grammar inside plus `+`, `*` and grouping parentheses, balanced. Everything else is rejected: in particular every
   * function that can load a resource or run code (`url`, `image-set`, `src`,
   * `image`, `element`, `attr`, `expression`, vendor variants), strings inside
   * functions, escapes, comments, `;`, `{`, `}`, `<`, `>`, `!` and at-rules.
@@ -163,6 +163,8 @@ object CssValue {
     while (i < n) {
       val c = s.charAt(i)
       if (c == ' ' || c == '\t' || c == ',' || c == '/') i += 1
+      else if (depth > 0 && (c == '+' || c == '*')) i += 1 // arithmetic inside an allowed math function
+      else if (depth > 0 && c == '(') { depth += 1; i += 1 } // grouping inside an allowed function
       else if (c == ')') {
         if (depth == 0) return false
         depth -= 1

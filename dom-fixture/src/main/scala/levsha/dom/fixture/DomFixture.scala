@@ -203,6 +203,20 @@ object DomFixture {
       val stillWorks = { render(container)(div("next")); html(container) == "<div>next</div>" }
       (threw && kept && stillWorks, s"threw=$threw kept=$kept ${html(container)}")
     }
+    check("a remount from a disconnected callback during disposal is not orphaned") {
+      var clicks = 0
+      def view = div(TagDef("x-remount")(), button(event("click")({ clicks += 1; true }), "b"))
+      render(container)(view)
+      js.Dynamic.global.window.__avocetOnDisconnect = { () =>
+        dispose(container)
+        render(container)(view)
+      }: js.Function0[Unit]
+      dispose(container)
+      js.Dynamic.global.window.__avocetOnDisconnect = null
+      render(container)(view)
+      fire(container.querySelector("button"), "click", bubbles = true)
+      (clicks == 1 && debugIsMounted(container) && debugHandlerCount(container) == 1, s"clicks=$clicks handlers=${debugHandlerCount(container)}")
+    }
     check("render after dispose mounts from scratch") {
       render(container)(div("again"))
       (html(container) == "<div>again</div>" && debugIndexSize(container) == 2, s"${html(container)} index=${debugIndexSize(container)}")

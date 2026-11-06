@@ -103,10 +103,17 @@ package object dom {
         target.addEventListener(tpe, nativeEventHandler, useCapture = true)
       }
 
-    def dispose(): Unit = if (root.state != State.Disposed) {
-      // Eligibility first: a dispose from a rendering callback must not destroy the published view.
+    private var disposing = false
+
+    /** Throws when a render is in progress: a dispose from a rendering callback must not destroy the published view. */
+    def ensureDisposable(): Unit =
       if (root.state == State.Rendering)
         throw RenderException.invalidState("avocet.dom: dispose() called while a render is in progress")
+
+    /** Idempotent; a nested call from a DOM callback during disposal is a no-op. */
+    def dispose(): Unit = if (root.state != State.Disposed && !disposing) {
+      ensureDisposable()
+      disposing = true
       nativeListeners.foreach { case (tpe, listener) =>
         target.removeEventListener(tpe, listener, useCapture = true)
       }
@@ -140,8 +147,11 @@ package object dom {
   /** Releases everything Avocet holds for `target`. Safe to call twice. */
   def dispose(target: Element): Unit =
     roots.get(target).foreach { root =>
-      root.dispose() // throws, leaving the root registered and intact, when a render is in progress
+      root.ensureDisposable() // throws, leaving the root registered and intact, when a render is in progress
+      // Unregister before any DOM mutation: a custom element callback that disposes and remounts
+      // during cleanup gets a fresh root, and that replacement is never evicted by this call.
       roots.remove(target)
+      root.dispose()
     }
 
   def event(`type`: String, phase: EventPhase = EventPhase.Bubbling)

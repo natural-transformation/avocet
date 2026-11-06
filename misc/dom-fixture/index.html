@@ -9,6 +9,10 @@
     customElements.define('x-reentrant', class extends HTMLElement {
       connectedCallback() { if (window.__avocetReentrant) window.__avocetReentrant(); }
     });
+    // Its removal during disposal disposes and remounts the same target; the fixture checks nothing is orphaned.
+    customElements.define('x-remount', class extends HTMLElement {
+      disconnectedCallback() { if (window.__avocetOnDisconnect) window.__avocetOnDisconnect(); }
+    });
   </script>
 </head>
 <body>

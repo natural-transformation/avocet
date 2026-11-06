@@ -392,3 +392,15 @@ Spoonbill worktree after `sbt clean`: `spoonbill/test` 614, `testkit/test`
 expectation changed with the paragraph fix (`RenderLifecycleTest`): a
 paragraph closed by `div` is no longer reported a second time for a later
 `form`, which matches the parser.
+
+## Second review (2026-11-06) and fixes
+
+| Finding | Confirmed cause | Fix | Regression |
+| --- | --- | --- | --- |
+| P2 optimized collections evaluate the callback before the input | The non-literal `each` and `Seq.map` lowerings bound the callback before evaluating the collection, the reverse of plain Scala order. | Collection bound first, then the callback, then the iterator. | `ReviewFixesTest`: a collection factory that sets a value captured by the callback factory renders `7` in both forms; the evaluation log is `coll, cb` for `each` and `map` in both forms. |
+| P2 disposal orphans a replacement root | `dispose(target)` disposed first and removed the registry entry afterwards; a `disconnectedCallback` that disposed and remounted during cleanup registered a replacement that the outer call then evicted, leaving its listeners attached. | Eligibility check, then registry removal, then mutation; a nested dispose of the same root is a no-op. A remount during disposal gets a fresh root that this call never evicts. | Browser fixture (`x-remount` custom element): after a dispose that remounts from `disconnectedCallback`, one click invokes exactly one handler, the target has one root and one handler. |
+| P2 CSS allowlist rejects `calc()` arithmetic | The grammar accepted signed numbers but no binary `+`, `*` or grouping parentheses. | Inside an allowed function, `+`, `*` and grouping parentheses are accepted (balanced); at the top level they are still rejected, and the function allowlist is unchanged. | `ReviewFixesTest`: `calc(100% + 10px)`, `calc(2 * 10px)`, `calc((100% - 10px) / 2)`, nested `min`/`clamp` accepted; top-level arithmetic, unbalanced parentheses and `calc(url(x) + 1px)` rejected. |
+
+Verification of this revision: `sbt +test` coreJVM 166 passed, coreJS 158
+passed, dom 4; fixture 23 of 23 in Chromium 152; `bench/compile` passes;
+candidate `1.0.0-r2-baeeea2-SNAPSHOT` in the Spoonbill worktree after `sbt clean`: `spoonbill/test` 614, `testkit/test` 19, real-service check PASS in Chromium and WebKit.

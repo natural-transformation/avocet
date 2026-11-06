@@ -115,8 +115,10 @@ object DslOptimizerMacro:
         }
       else
         '{
+          // Plain `seq.map(f)` evaluates the collection before the callback.
+          val seq0 = $seq
           val fn = $f
-          val i = $seq.iterator
+          val i = seq0.iterator
           while (i.hasNext) fn(i.next()).apply($rc)
         }
 
@@ -162,8 +164,10 @@ object DslOptimizerMacro:
           }
         else
           '{
+            // Plain `each(xs)(f)` evaluates the collection before the callback.
+            val xs0 = $xs
             val fn = $f
-            val i = $xs.iterator
+            val i = xs0.iterator
             while (i.hasNext) fn(i.next()).apply($rc)
           }
       case '{noNode} => '{}
