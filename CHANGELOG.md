@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased (M2: durable architecture and API)
+## 2.0.0 (2026-11-06)
+
+Major version: saved render buffers from 1.0.0 are rejected, lifecycle
+misuse and invalid names now throw, and `avocet.dom` throws
+`RenderException` where it threw `IllegalStateException`. The binary API is
+otherwise compatible (see each Compatibility section).
+
+### M2: durable architecture and API
 
 Builds on the M1 repairs below. Contract references are to
 [IMPROVEMENT-CONTRACTS.md](IMPROVEMENT-CONTRACTS.md); evidence per package is
@@ -102,7 +109,7 @@ in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md).
   encoder; `RAW_TEXT_CONTENT` diagnoses it, a trusted raw-text API is not
   provided.
 
-## Unreleased (M1: repaired baseline)
+### M1: repaired baseline
 
 Security and correctness repairs of the supported rendering paths. Defect
 IDs refer to [IMPROVEMENT-PLAN.md](IMPROVEMENT-PLAN.md); the evidence per

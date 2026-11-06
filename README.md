@@ -19,7 +19,7 @@ You can use Avocet as a static HTML renderer.
 
 ```scala
 // build.sbt
-libraryDependencies += "com.natural-transformation" %% "avocet-core" % "1.0.0"
+libraryDependencies += "com.natural-transformation" %% "avocet-core" % "2.0.0"
 ```
 
 ```scala
@@ -98,7 +98,7 @@ zero; the measured figures per workload are in
 
 ```scala
 // build.sbt
-libraryDependencies += "com.natural-transformation" %%% "avocet-dom" % "1.0.0"
+libraryDependencies += "com.natural-transformation" %%% "avocet-dom" % "2.0.0"
 ```
 
 ```scala
