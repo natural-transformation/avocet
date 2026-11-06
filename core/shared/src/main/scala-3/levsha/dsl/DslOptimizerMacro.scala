@@ -92,6 +92,32 @@ object DslOptimizerMacro:
         '{$rc.setStyle($styleDef.name, $styleValue)}
       case '{(${attrDef}: AttrDef).:=[T]($attrValue)} =>
         '{$rc.setAttr($attrDef.ns, $attrDef.name, $attrValue)}
+      // Typed keys: the encoder runs once, at render time, like the plain form
+      case '{(${key}: AttrKey[a]).:=[T]($value)} =>
+        '{$rc.setAttr($key.ns, $key.name, $key.encode($value))}
+      case '{(${key}: BooleanAttrKey).:=[T]($present)} =>
+        '{if ($present) $rc.setAttr($key.ns, $key.name, "")}
+      case '{(${key}: StyleKey[a]).@=[T]($value)} =>
+        '{$rc.setStyle($key.name, $key.encode($value))}
+      // Explicit fragment and iteration combinators
+      case '{fragment[T](${Varargs(nodes)}:_*)} =>
+        val xs = nodes.map(aux(rc, _)).toList
+        xs match {
+          case Nil => '{}
+          case x :: Nil => x
+          case _ => Expr.block(xs.dropRight(1), xs.last)
+        }
+      case '{each[T, a]($xs)($f)} =>
+        '{
+          val i = $xs.iterator
+          while (i.hasNext) {
+            val x = i.next()
+            ${aux(rc, Expr.betaReduce('{($f)(x)}))}
+          }
+        }
+      case '{noNode} => '{}
+      case '{noAttr} => '{}
+      case '{noStyle} => '{}
       // Optimize converters
       case '{stringToNode($value)} => '{$rc.addTextNode($value)}
       case '{miscToNode[T]($value)} => '{$rc.addMisc($value)}

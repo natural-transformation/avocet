@@ -20,6 +20,26 @@ import avocet.Document.{Attr, Empty, Node, Style}
 
 import scala.language.implicitConversions
 
+/**
+  * Template DSL.
+  *
+  * Evaluation laws (they hold for plain and optimized templates alike, and
+  * the optimizer tests assert them):
+  *
+  *  - A template is a description: building it evaluates its Scala
+  *    arguments as usual (eagerly, once), rendering it runs the recorded
+  *    operations. Expressions inside `optimize { ... }` are evaluated when
+  *    the optimized node is rendered, and exactly once per render.
+  *  - Dynamic expressions (attribute values, text, options, collections)
+  *    are evaluated exactly once per render, in document order.
+  *  - Operations reach the interpreter in document order: styles, then
+  *    attributes, then children. A plain `TagDef.apply` sorts its arguments
+  *    by kind to achieve this; the optimizer sorts at compile time.
+  *  - An exception thrown by an expression propagates at render time, after
+  *    the operations that precede it in document order were emitted.
+  *  - A collection is iterated once per render; a reusable collection
+  *    renders on every render, a single-use iterator only on the first.
+  */
 package object dsl extends Optimize {
 
   trait TagDef {
@@ -85,6 +105,36 @@ package object dsl extends Optimize {
 //  }
 
   def void[T]: Document.Node[T] with Document.Attr[T] = Empty
+
+  /** Typed empty node; use it where `void` leaves inference open. Renders nothing. */
+  val noNode: Node[Nothing] = Node[Nothing](_ => ())
+
+  /** Typed empty attribute. Renders nothing. */
+  val noAttr: Attr[Nothing] = Attr[Nothing](_ => ())
+
+  /** Typed empty style. Renders nothing. */
+  val noStyle: Style[Nothing] = Style[Nothing](_ => ())
+
+  /**
+    * Explicit fragment: renders `nodes` in order without a wrapping element.
+    * The arguments are evaluated once, when `fragment` is called (before
+    * rendering), like any Scala argument; the optimizer preserves that.
+    */
+  def fragment[M](nodes: Node[M]*): Node[M] =
+    Node[M] { rc => nodes.foreach(_(rc)) }
+
+  /**
+    * Explicit iterable rendering: `each(items)(item => li(item))`. `f` is
+    * applied to each element once, in iteration order, during rendering; the
+    * collection is iterated once per render, so a single-use `Iterator`
+    * renders only once. The optimizer lowers this to a loop that emits the
+    * body's operations directly.
+    */
+  def each[M, A](xs: Iterable[A])(f: A => Node[M]): Node[M] =
+    Node[M] { rc =>
+      val i = xs.iterator
+      while (i.hasNext) f(i.next())(rc)
+    }
 
   /**
     * Add node or attribute conditionally

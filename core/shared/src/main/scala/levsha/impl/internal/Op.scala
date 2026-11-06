@@ -28,10 +28,13 @@ private[impl] object Op {
   final val OpEnd = 6
   final val OpStyle = 100
 
-  // Header bytes sizes
+  // Header bytes sizes (fixed part of each operation, without name/value bytes)
 
   final val OpSize = 1
-  final val OpOpenSize = 17
-  final val OpAttrSize = 12
+  /** OPEN(1) + sum(4) + length(4) + xmlns(1) + name hash(4) + name length(2) */
+  final val OpOpenSize = 16
+  /** ATTR(1) + xmlns(1) + name hash(4) + name length(2) + is style(1) + value hash(4) + value length(4) */
+  final val OpAttrSize = 17
+  /** TEXT(1) + hash(4) + length(4) */
   final val OpTextSize = 9
 }
