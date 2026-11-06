@@ -25,25 +25,77 @@ import org.scalajs.{dom => browserDom}
 import scala.collection.mutable
 import scala.scalajs.js
 
+/**
+  * Applies changes to the browser DOM under `target`.
+  *
+  * The index maps positional ids to live nodes. Replacing or removing a node
+  * drops the index entries of its whole subtree, so a retired node can never
+  * receive a later update. A change that targets a missing node means the
+  * index and the engine's baseline disagree; it throws, and the caller marks
+  * the root as failed.
+  */
 final class DomChangesPerformer(target: Element) extends ChangesPerformer {
 
   private val index = mutable.Map[Id, Node](Id.TopLevel -> target)
 
+  // The template root (id 1) is the target element itself, so events on it resolve to that id.
+  target.asInstanceOf[js.Dynamic].vid = Id.TopLevel.mkString
+
+  /** Number of indexed nodes, root included. Test seam. */
+  private[dom] def indexSize: Int = index.size
+
+  private def vidOf(node: Node): Option[String] =
+    node.asInstanceOf[js.Dynamic].vid.asInstanceOf[Any] match {
+      case vid: String => Some(vid)
+      case _ => None
+    }
+
+  /** Drops the index entries of `node` and all its descendants; the target itself stays indexed. */
+  private def forget(node: Node): Unit = {
+    if (node ne target) vidOf(node).foreach(vid => index.remove(Id(vid)))
+    var child = node.firstChild
+    while (child != null) {
+      forget(child)
+      child = child.nextSibling
+    }
+  }
+
+  /** Removes every child of the target and forgets their index entries. */
+  private def clearTarget(): Unit = {
+    forget(target)
+    while (target.firstChild != null) target.removeChild(target.firstChild)
+  }
+
   private def create(fastId: FastId)(createNewElement: => Node): Unit = {
     val id = fastId.mkId
-    val parentId = id.parent
-    parentId.flatMap(index.get) foreach { parent =>
-      val newEl = createNewElement
-      newEl.asInstanceOf[js.Dynamic]
-        .vid = id.mkString
-      index.get(id) match {
-        case Some(oldEl) if oldEl.parentNode == parent =>
-          parent.replaceChild(newEl, oldEl)
-          index.update(id, newEl)
-        case _ =>
-          parent.appendChild(newEl)
-          index.update(id, newEl)
-      }
+    if (id == Id.TopLevel) {
+      // The root node maps onto the target: it is never replaced, only emptied. Its tag is not checked.
+      clearTarget()
+      return
+    }
+    val parent = id.parent.flatMap(index.get).getOrElse(missing(id, "create"))
+    val newEl = createNewElement
+    newEl.asInstanceOf[js.Dynamic].vid = id.mkString
+    index.get(id) match {
+      case Some(oldEl) =>
+        forget(oldEl)
+        if (oldEl.parentNode == parent) parent.replaceChild(newEl, oldEl)
+        else parent.appendChild(newEl)
+      case None =>
+        parent.appendChild(newEl)
+    }
+    index.update(id, newEl)
+  }
+
+  private def missing(id: Id, op: String): Nothing =
+    throw new IllegalStateException(s"DOM index has no node for $op at ${id.mkString}")
+
+  private def element(fastId: FastId, op: String): Element = {
+    val id = fastId.mkId
+    index.get(id) match {
+      case Some(node: Element) => node
+      case Some(_) => throw new IllegalStateException(s"$op targets a text node at ${id.mkString}")
+      case None => missing(id, op)
     }
   }
 
@@ -55,29 +107,42 @@ final class DomChangesPerformer(target: Element) extends ChangesPerformer {
     browserDom.document.createElementNS(xmlNs, tag)
   }
 
-  def remove(id: FastId): Unit = index.remove(id.mkId) foreach { el =>
-    el.parentNode.removeChild(el)
+  def remove(id: FastId): Unit = {
+    val nodeId = id.mkId
+    if (nodeId == Id.TopLevel) { clearTarget(); return }
+    val el = index.getOrElse(nodeId, missing(nodeId, "remove"))
+    forget(el)
+    if (el.parentNode != null) el.parentNode.removeChild(el)
   }
 
-  def setAttr(id: FastId, xmlNs: String, name: String, value: String): Unit = index.get(id.mkId) foreach {
-    case node: Element if xmlNs eq XmlNs.html.uri => node.setAttribute(name, value)
-    case node: Element => node.setAttributeNS(xmlNs, name, value)
-    case node => browserDom.console.warn(s"Can't set attribute to $node")
+  def setAttr(id: FastId, xmlNs: String, name: String, value: String): Unit = {
+    val node = element(id, "setAttr")
+    if (xmlNs eq XmlNs.html.uri) node.setAttribute(name, value)
+    else node.setAttributeNS(xmlNs, name, value)
   }
 
-  def removeAttr(id: FastId, xmlNs: String, name: String): Unit = index.get(id.mkId) foreach {
-    case node: Element if xmlNs eq XmlNs.html.uri => node.removeAttribute(name)
-    case node: Element => node.removeAttributeNS(xmlNs, name)
-    case node => browserDom.console.warn(s"Can't remove attribute from $node")
+  def removeAttr(id: FastId, xmlNs: String, name: String): Unit = {
+    val node = element(id, "removeAttr")
+    if (xmlNs eq XmlNs.html.uri) node.removeAttribute(name)
+    else node.removeAttributeNS(xmlNs, name)
   }
 
-  def setStyle(id: FastId, name: String, value: String): Unit = index.get(id.mkId) foreach {
+  def setStyle(id: FastId, name: String, value: String): Unit = element(id, "setStyle") match {
     case node: HTMLElement => node.style.setProperty(name, value)
     case node => browserDom.console.warn(s"Can't set style to $node")
   }
 
-  def removeStyle(id: FastId, name: String): Unit = index.get(id.mkId) foreach {
+  def removeStyle(id: FastId, name: String): Unit = element(id, "removeStyle") match {
     case node: HTMLElement => node.style.removeProperty(name)
     case node => browserDom.console.warn(s"Can't remove style from $node")
+  }
+
+  /** Removes every node this performer created and clears the index. */
+  def dispose(): Unit = {
+    index.remove(Id.TopLevel)
+    index.values.foreach { node =>
+      if (node.parentNode == target) target.removeChild(node)
+    }
+    index.clear()
   }
 }

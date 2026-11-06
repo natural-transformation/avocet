@@ -16,7 +16,8 @@
 
 package avocet.impl
 
-import avocet.{RenderContext, XmlNs}
+import avocet.{RenderContext, RenderException, XmlNs}
+import avocet.impl.internal.NameValidator
 import avocet.impl.internal.Op._
 
 import scala.annotation.switch
@@ -24,6 +25,19 @@ import scala.collection.mutable
 
 /**
   * Generates XHTML output.
+  *
+  * Encoding contract: text and attribute values are XML-escaped, so they stay
+  * data. Style names and values are escaped for the enclosing quoted `style`
+  * attribute, so a CSS value can never close that attribute or add another
+  * one. Whether a CSS expression or URL is acceptable is a separate policy
+  * that this serializer does not decide. Tag, attribute and style names are
+  * validated by [[NameValidator]] and never escaped.
+  *
+  * Operation order contract: all styles of an element precede its attributes,
+  * and both precede its children. The DSL orders content this way; a raw
+  * interpreter call out of order fails instead of emitting a duplicate
+  * `style` attribute or attribute text inside the element body.
+  *
   * @author Aleksey Fomkin <aleksey.fomkin@gmail.com>
   */
 class XhtmlRenderContext[MiscType](prettyPrinting: TextPrettyPrintingConfig) extends RenderContext[MiscType] {
@@ -47,6 +61,7 @@ class XhtmlRenderContext[MiscType](prettyPrinting: TextPrettyPrintingConfig) ext
     }
 
   def openNode(xmlns: XmlNs, name: String): Unit = {
+    NameValidator.checkTagName(name)
     beforeOpenNode()
     addIndentation()
     builder.append('<')
@@ -83,8 +98,11 @@ class XhtmlRenderContext[MiscType](prettyPrinting: TextPrettyPrintingConfig) ext
   }
 
   def setAttr(xmlNs: XmlNs, name: String, value: String): Unit = {
+    NameValidator.checkAttrName(name)
     if (lastOp == OpStyle) {
       builder.append('"')
+    } else if (lastOp != OpOpen && lastOp != OpAttr) {
+      throw RenderException.invalidState("setAttr is only allowed directly after openNode, styles or other attributes")
     }
     builder.append(' ')
     builder.append(name)
@@ -96,12 +114,16 @@ class XhtmlRenderContext[MiscType](prettyPrinting: TextPrettyPrintingConfig) ext
   }
 
   def setStyle(name: String, value: String): Unit = {
-    if (lastOp != OpStyle) {
+    NameValidator.checkStyleName(name)
+    if (lastOp == OpOpen) {
       builder.append(" style=\"")
+    } else if (lastOp != OpStyle) {
+      throw RenderException.invalidState("setStyle is only allowed directly after openNode or other styles")
     }
     builder.append(name)
     builder.append(":")
-    builder.append(value)
+    // The value lives inside the quoted style attribute, so it needs the same encoding as any attribute value.
+    builder.append(xmlEscape(value))
     builder.append(";")
     lastOp = OpStyle
   }

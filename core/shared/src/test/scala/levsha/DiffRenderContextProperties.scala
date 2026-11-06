@@ -2,7 +2,6 @@ package avocet
 
 import avocet.Change.DiffTestChangesPerformer
 import avocet.impl.DiffRenderContext
-import avocet.impl.DiffRenderContext.DummyChangesPerformer
 import org.scalacheck.{Gen, Properties, _}
 import Ordering.Implicits._
 
@@ -13,45 +12,55 @@ object DiffProperties extends Properties("Diff") {
 
   import TestDoc._
 
-  property("doesn't fail on arbitrary trees") = {
+  /** Diffs `a` to `b` on a fresh context and returns the emitted changes in order. */
+  def diffChanges(a: TestDoc, b: TestDoc): Seq[Change] = {
+    val performer = new DiffTestChangesPerformer()
+    val renderContext = DiffRenderContext[Nothing]()
+    a(renderContext)
+    renderContext.finalizeDocument()
+    renderContext.swap()
+    b(renderContext)
+    renderContext.finalizeDocument()
+    renderContext.diff(performer)
+    performer.result
+  }
+
+  /** Ordered replay oracle: applying the changes to `a` must give exactly `b`. */
+  def replayProp(a: TestDoc, b: TestDoc, changes: Seq[Change]): Prop = {
+    val expected = ReferenceDom.fromDoc(b)
+    val actual = ReferenceDom(ReferenceDom.fromDoc(a), changes)
+    Prop(expected == actual) :| {
+      s"\nChanges:\n  ${changes.mkString("\n  ")}\nDifference:\n${ReferenceDom.describeDifference(expected, actual)}"
+    }
+  }
+
+  // Exceptions propagate: an unexpected failure is a failing case, never a discarded one.
+  property("ordered replay of the diff reproduces the new tree") = {
     val gen = for (a <- genDocument; b <- genDocument)
       yield (a, b)
     Prop.forAll(gen) {
       case (a, b) =>
-        val performer = DummyChangesPerformer
-        val renderContext = DiffRenderContext[Nothing]()
-        a(renderContext)
-        renderContext.finalizeDocument()
-        renderContext.swap()
-        b(renderContext)
-        renderContext.finalizeDocument()
-        try {
-          renderContext.diff(performer)
-        } catch {
-          case e: Throwable =>
-            e.printStackTrace()
-        }
-        true
+        replayProp(a, b, diffChanges(a, b))
+    }
+  }
+
+  property("diffing a tree against itself emits nothing") = {
+    Prop.forAll(genDocument) { a =>
+      val changes = diffChanges(a, a)
+      Prop(changes.isEmpty) :| s"unexpected changes: ${changes.mkString(", ")}"
     }
   }
 
   property("generate valid changes set") = {
     Prop.forAll(ChangesTrial.genChangesTrial) { trial =>
-      val performer = new DiffTestChangesPerformer()
-      val renderContext = DiffRenderContext[Nothing]()
-      trial.originalDocument(renderContext)
-      renderContext.finalizeDocument()
-      renderContext.swap()
-      trial.newDocument(renderContext)
-      renderContext.finalizeDocument()
-      renderContext.diff(performer)
+      val changes = diffChanges(trial.originalDocument, trial.newDocument)
       val sample = trial.changes.sorted
-      val res = performer.result.sorted
-      assert(sample == res, {
+      val res = changes.sorted
+      val sortedProp = Prop(sample == res) :| {
         s"\nShould be:\n  ${sample.mkString("\n  ")}" +
         s"\nBut:\n  ${res.mkString("\n  ")}"
-      })
-      true
+      }
+      sortedProp && replayProp(trial.originalDocument, trial.newDocument, changes)
     }
   }
 
@@ -105,6 +114,9 @@ object TestDoc {
     }
   }
 
+  // Fixed collision fixtures (see HashCollisionFixtures): `Aa`/`BB` share a
+  // name hash, `t86388`/`t118091` share a value hash. Long names cover the
+  // former fixed-header limits (10-char tags, 29-char attribute names).
   val genAttr = {
     Gen.frequency(
       (5, "class" -> "hello"),
@@ -119,7 +131,14 @@ object TestDoc {
       (2, "lang" -> "ru"),
       (3, "lang" -> "en"),
       (1, "style" -> "margin: 10;"),
-      (1, "style" -> "padding: 10;")
+      (1, "style" -> "padding: 10;"),
+      (2, "width" -> "100"),
+      (2, "height" -> "2"),
+      (1, "data-abcdefghijklmnopqrstuvwx" -> "x"),
+      (1, "Aa" -> "1"),
+      (1, "BB" -> "2"),
+      (1, "class" -> "t86388"),
+      (1, "class" -> "t118091")
     )
   }
 
@@ -134,7 +153,15 @@ object TestDoc {
       (7, "padding" -> "2px"),
       (7, "margin" -> "10px"),
       (7, "margin" -> "5ox"),
-      (7, "margin" -> "2px")
+      (7, "margin" -> "2px"),
+      (2, "width" -> "50px"),
+      (2, "height" -> "1px"),
+      (1, "-webkit-border-bottom-left-radius" -> "1px"),
+      (1, "--custom-property-with-a-long-name" -> "x"),
+      (1, "Aa" -> "1"),
+      (1, "BB" -> "2"),
+      (1, "color" -> "t86388"),
+      (1, "color" -> "t118091")
     )
   }
 
@@ -159,14 +186,23 @@ object TestDoc {
       (1, "button"),
       (1, "ul"),
       (1, "li"),
-      (1, "form")
+      (1, "form"),
+      (1, "blockquote"),
+      (1, "figcaption"),
+      (1, "linearGradient"),
+      (1, "my-custom-element-with-a-rather-long-name"),
+      (1, "Aa"),
+      (1, "BB")
     )
   }
 
   val genText = {
-    Gen.nonEmptyListOf(Gen.alphaChar).map(s => Text(s.mkString))
+    Gen.frequency(
+      (8, Gen.nonEmptyListOf(Gen.alphaChar).map(s => Text(s.mkString))),
+      (1, Gen.const(Text("t86388"))),
+      (1, Gen.const(Text("t118091")))
+    )
   }
-
   val genElement = Gen.sized { size =>
     for {
       name <- genTag
@@ -281,7 +317,13 @@ object ChangesTrial {
             index <- Gen.choose(0, flatDoc.length - 1)
             (id, doc) = flatDoc(index)
             intentGen <- doc match {
-              case _: Text => genReplaceIntent(id)
+              case Text(value) =>
+                // Replacing a text with an identical text is not a change; the fixed collision
+                // texts make that likely, so filter it out.
+                genReplaceIntent(id).filter {
+                  case Intent.Replace(_, Text(`value`)) => false
+                  case _ => true
+                }
               case el: Element =>
                 Gen.oneOf(
                   genSetAttrIntent(id).filter(setAttr => !el.attrs.contains(setAttr.attr)),
@@ -357,7 +399,12 @@ object ChangesTrial {
           case Intent.RemoveStyle(id, style) => Seq(Change.removeStyle(id, style))
         }
         xs.filter {
-            case _: Change.remove => true
+            // A remove under an already removed subtree is implied by the outer remove.
+            case Change.remove(id) =>
+              !xs.exists {
+                case Change.remove(other) => other != id && id.startsWith(other)
+                case _ => false
+              }
             case change =>
               !xs.exists {
                 case Change.remove(removeId) => change.id.startsWith(removeId)

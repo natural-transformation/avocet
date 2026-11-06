@@ -23,11 +23,27 @@ import scala.collection.mutable
   * @author Aleksey Fomkin <aleksey.fomkin@gmail.com>
   */
 object IdBuilder {
-  def apply(maxLevel: Int = 256): IdBuilder =
+
+  /** Largest sibling index. Positions are stored as `Short`; the check keeps them from wrapping. */
+  final val MaxSiblings: Int = Short.MaxValue
+
+  /** Default number of levels; the root is level 1, so nesting is limited to `DefaultMaxLevel - 1`. */
+  final val DefaultMaxLevel: Int = 256
+
+  def apply(maxLevel: Int = DefaultMaxLevel): IdBuilder =
     new IdBuilder(maxLevel)
 }
 
+/**
+  * Positional id builder. Every limit is checked before the state changes,
+  * so a failed call leaves the builder exactly as it was.
+  */
 final class IdBuilder(maxLevel: Int) extends FastId {
+
+  import IdBuilder.MaxSiblings
+
+  if (maxLevel < 1)
+    throw RenderException.invalidArgument(s"maxLevel must be positive, got $maxLevel")
 
   private var level = 1
   private val buffer = ShortBuffer.allocate(maxLevel)
@@ -36,27 +52,37 @@ final class IdBuilder(maxLevel: Int) extends FastId {
   // Initial limit
   buffer.limit(level)
 
+  /** Throws when one more level would exceed `maxLevel`. Call it before `incId()` when both must succeed together. */
+  def ensureCanDescend(): Unit =
+    if (level >= maxLevel)
+      throw RenderException.limit(s"nesting depth exceeds ${maxLevel - 1}")
+
   def incLevel(): Unit = {
+    ensureCanDescend()
     level += 1
     buffer.limit(level)
   }
 
   /** Just decreases level */
   def decLevelTmp(): Unit = {
+    ensureHasParent()
     level -= 1
     buffer.limit(level)
   }
 
   /** Resets current id and decreases level */
   def decLevel(): Unit = {
+    ensureHasParent()
     buffer.put(index, 0.toShort)
     level -= 1
     buffer.limit(level)
   }
 
   def incId(): Unit = {
-    val updated = buffer.get(index) + 1
-    buffer.put(index, updated.toShort)
+    val current = buffer.get(index)
+    if (current >= MaxSiblings)
+      throw RenderException.limit(s"more than $MaxSiblings siblings at level $level")
+    buffer.put(index, (current + 1).toShort)
   }
 
   def decId(): Unit = {
@@ -100,6 +126,10 @@ final class IdBuilder(maxLevel: Int) extends FastId {
   }
 
   def hasParent: Boolean = level > 1
+
+  private def ensureHasParent(): Unit =
+    if (level <= 1)
+      throw RenderException.invalidState("id level underflow: no parent level")
 
   private def mkStringLevel(sb: mutable.StringBuilder, sep: Char, l: Int): Unit = {
     buffer.rewind()

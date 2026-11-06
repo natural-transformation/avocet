@@ -4,7 +4,7 @@
 
 # Avocet
 
-Avocet is a fast HTML template engine and eDSL for Scala 3. Optimized templates work without additional memory allocation.
+Avocet is a fast HTML template engine and eDSL for Scala 3. Optimized templates render without allocating a template object tree per render; the render buffers, the node index of a DOM backend and application data are retained (see "Memory allocation model" below).
 Avocet supports changeset inference, which allows to use it as virtual-dom-like middleware.
 
 **Requirements:** Scala 3.3+ and JDK 21+.
@@ -86,9 +86,15 @@ bench / Jmh / run .StaticRenderingComparision
 ## As a virtual DOM
 
 Avocet can be used as virtual-DOM-like middleware. Unlike other popular
-virtual DOM solutions, Avocet doesn't allocate additional memory for construction
-of a new virtual DOM copy. Also it does not allocate memory in changes inferring phase.
-Avocet's memory usage is constant.
+virtual DOM solutions, Avocet does not build an object tree for the new
+virtual DOM: templates write into a byte buffer and changes are inferred by
+comparing two buffers. Memory is bounded by the two render buffers (which
+grow with the largest rendered document and shrink again through `trim()`
+or a `TrimPolicy`), the DOM backend's node index and the handler table;
+`dispose(target)` releases them. Allocation per update is small but not
+zero; the measured figures per workload are in
+[IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md) and
+[bench/BASELINE.md](bench/BASELINE.md).
 
 ```scala
 // build.sbt
@@ -228,6 +234,63 @@ sequenceDiagram
 
 **Design note:** `DiffRenderContext` is intentionally **stateful**. You typically keep one instance per render-loop (single-threaded) and reuse it across updates.
 
+The fast performer (`FastChangesPerformer`) **borrows** its arguments: `id` is the
+engine's mutable id builder and `source` is the live tape. Copy what you need before
+the callback returns and never retain the references. Consumers that queue changes or
+hand them to another thread use `OwnedChangesPerformer`, which copies every argument
+into an `OwnedChange` value.
+
+### `RenderRoot`: the lifecycle API
+
+`RenderRoot` runs the whole sequence (render → validate → finalize → diff → publish)
+and reports the result as a `RenderOutcome` instead of leaving the order of the
+low-level calls to the caller:
+
+```scala
+import avocet._
+import avocet.impl.OwnedChangesPerformer
+
+val performer = new OwnedChangesPerformer.Buffer
+val root = RenderRoot[MyEvent](performer, Validation.interactiveHtml)
+
+root.render(view(state)) match {
+  case RenderOutcome.Published(generation) =>
+    val handlers = root.misc            // misc entries of the published tree
+    val changes = performer.drain()     // owned changes, safe to queue
+  case RenderOutcome.Rejected(cause) =>  // template, validation or limit failure:
+    ()                                  // the previous tree and handlers stay published
+  case RenderOutcome.Invalidated(cause) => // the performer failed mid-apply:
+    root.reset()                        // backend writes are not rolled back; replay from empty
+}
+root.dispose()
+```
+
+States are explicit (`Idle`, `Rendering`, `Invalid`, `Disposed`); a render on an
+invalid or disposed root, or a nested render from a callback, throws
+`RenderException(INVALID_STATE)`. The Scala.js `avocet.dom` adapter is built on
+`RenderRoot`; Spoonbill keeps using the low-level context.
+
+### Validation
+
+`ValidatingRenderContext` is an opt-in decorator over any `RenderContext` (use
+`ValidatingRenderContext.stateful` for a `StatefulRenderContext`). `Validation`
+selects the check groups and the reporting mode:
+
+- `structural`: balanced nodes, operation order, duplicate attributes;
+- `htmlShape`: void-element children, paragraph auto-closing, nested forms,
+  table foster parenting and similar parser normalizations (HTML namespace only);
+- `interactive`: the Spoonbill-style bootstrap profile (HTML5 output without
+  pretty-printing, parsed by a browser, then patched by positional id):
+  adjacent or empty text, several roots, text in `script`/`style`, parser-dropped
+  newlines and carriage returns, relocated document elements.
+
+Errors are `ValidationError(code, position, element, detail)` values with stable
+codes (`PARAGRAPH_CLOSED_BY_BLOCK`, `ADJACENT_TEXT`, ...) and no payload; fail-fast
+mode throws a `ValidationException` before the offending operation reaches the inner
+context, collect mode keeps up to a cap and still forwards everything. Plain and
+optimized templates emit the same operations, so they get the same diagnostics.
+Resource limits are enforced by every interpreter whether or not validation is on.
+
 ### `addMisc` as an integration hook
 
 `addMisc(value)` attaches an out-of-band payload to the **current element id**. Integrations (eg frameworks built on Avocet) use it to collect things like:
@@ -236,14 +299,56 @@ sequenceDiagram
 - element ids for imperative access
 - component markers / other metadata
 
+## Typed attributes, styles and trust boundaries
+
+`AttrKey[A]` and `StyleKey[A]` accept only `A` and encode it at render time, so a
+value does not go through an unrestricted string API:
+
+```scala
+import avocet.dsl._
+import avocet.dsl.html._
+
+val tabIndex = AttrKey.int("tabindex")         // AttrKey[Int]
+val hrefUrl  = AttrKey.url("href")             // AttrKey[CheckedUrl]
+val disabledKey = AttrKey.boolean("disabled")  // present or absent
+val widthPx  = StyleKey.px("width")            // StyleKey[Int]
+val color    = StyleKey.css("color")           // StyleKey[CssValue]
+
+a(tabIndex := 2, hrefUrl := CheckedUrl(userLink).getOrElse(CheckedUrl.trusted("#")), "go")
+div(disabledKey := busy, widthPx @= 10, color @= CssValue("red").get)
+```
+
+- `CheckedUrl(value, policy)` accepts a URL under an explicit `UrlPolicy` (scheme
+  allow-list, relative references) and rejects control characters a browser would
+  strip; `javascript:` never passes the default policy. It is a scheme policy, not a
+  sanitizer of the destination.
+- `CssValue(value)` accepts a data-safe declaration value: no `;`, braces, `<`, `>`,
+  backslash escapes, comments, `url(` or `expression(`. The interpreter protects the
+  enclosing `style` attribute in every case.
+- Dynamic names are validated when a key is built (`AttrKey.validated` returns an
+  `Either`), so an invalid name fails once instead of inside every render.
+- `trusted.inlineHandler`, `trusted.srcdoc`, `trusted.url` and `trusted.css` are the
+  explicit escape hatches. The plain `AttrDef :=` and `StyleDef @=` remain available
+  and are escaped as data, with no URL or CSS policy.
+- `fragment(nodes*)`, `each(xs)(f)`, `noNode`, `noAttr` and `noStyle` are explicit
+  composition helpers; all of them have optimizer lowerings.
+
+Evaluation laws (asserted by `OptimizerContractTest`): a plain template evaluates its
+arguments when it is built; expressions inside `optimize { ... }` run on every render,
+exactly once each, in document order; a collection is iterated once per render; an
+exception thrown by an expression surfaces after the operations that precede it.
+
 ## Memory allocation model explanation
 
-As noted below Avocet does not make _additional_
-memory allocations if template optimized. It is
-possible because optimized template, in compile-time
-rewrites into calls of `RenderContext` methods
-(unlike other template engines which represent
-their templates as AST on-heap).
+Optimized templates do not allocate a template object tree per render:
+`optimize` rewrites the template, at compile time, into calls of
+`RenderContext` methods (unlike template engines that represent their
+templates as an AST on the heap). What is still allocated per render is
+what the template computes (encoded attribute values, iterators of the
+collections it walks) plus whatever the performer does with the changes;
+retained memory is the render buffers, the backend's node index and the
+misc entries. The measured per-cycle and retained figures are in
+[IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md).
 
 For example,
 
@@ -315,7 +420,10 @@ your mind this list of optimizations:
 2. Same for cases of pattern matching
 3. `xs.map(x => div(x))` will be rewritten into a `while` loop
 4. `maybeX.map(x => div(x))` will be rewritten into an `if` expression
-5. `void` will be removed
+5. `void`, `noNode`, `noAttr` and `noStyle` will be removed
+6. `key := value` and `key @= value` on typed keys become direct `setAttr`/`setStyle` calls around the encoder
+7. `fragment(a, b, c)` is inlined into its parent
+8. `each(xs)(x => li(x))` will be rewritten into a `while` loop over `xs.iterator`
 
 The third item of this list shows us how to rewrite
 previous example so that optimization could be performed.

@@ -17,26 +17,24 @@
 package avocet.impl
 
 import java.nio.{ByteBuffer, ByteOrder}
-import java.nio.charset.StandardCharsets
 import avocet._
 import avocet.impl.DiffRenderContext._
 import avocet.impl.internal.Op._
+import avocet.impl.internal.{Hashing, NameValidator, StringHelper, TapeValidator}
 
 import scala.annotation.switch
-import internal.debox.{IntByteBufferMap, IntStringMap, StringSet}
-import avocet.impl.internal.StringHelper
-
-import scala.util.hashing.MurmurHash3
 
 /*
-Structures
+Structures (tape format version 2)
 
 node {
   byte OPEN
-  int sum
-  int end
+  int sum              // content hash: attributes, text and child hashes
+  int length           // byte length of the node from `sum` up to and including CLOSE
+  byte xmlns_code
   int tag_hash_code
-  int xmlns_hash_code
+  ushort name_length   // bytes, two per UTF-16 char
+  byte name[name_length]
   attr attr_list[]
   byte LAST_ATTR
   node|text child[]
@@ -45,130 +43,117 @@ node {
 
 text {
   byte TEXT
-  int sum
-  int length
+  int hash
+  int length           // bytes
   byte value[length]
 }
 
 attr {
   byte ATTR
+  byte xmlns_code (0 for styles)
   int attr_name_hash_code
-  int xmlns_hash_code (0 for styles)
-  bytes (0 - attr; 1 - style)
-  int length
-  byte value[length]
+  ushort name_length
+  byte name[name_length]
+  byte is_style (0 - attr; 1 - style)
+  int value_hash
+  int value_length
+  byte value[value_length]
 }
 
+Node lengths are relative, so equal subtrees are byte-identical wherever they
+are stored. Hashes are fast rejection tests only: every equality decision is
+confirmed by comparing the encoded bytes.
+
+Lifecycle
+
+  render ops -> finalizeDocument() -> diff(performer) -> swap() -> [reset()] -> render ops ...
+
+`lhs` is the document under construction (or just finalized), `rhs` the
+baseline. `swap()` exchanges them; the next render op clears the stale
+baseline that became `lhs`. `reset()` discards a partially written `lhs`
+(for example after an exception thrown by a template) and restores a clean
+construction state while the baseline stays intact.
+
+Retention: the backing buffer keeps its peak size unless `trim()` is called
+or an automatic `TrimPolicy` is configured; see `TrimPolicy`.
 */
 
-final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, savedBuffer: ByteBuffer)
+final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, savedBuffer: ByteBuffer, trimPolicy: TrimPolicy)
   extends StatefulRenderContext[M] {
 
-  if ((initialBufferSize == 0) || ((initialBufferSize & (initialBufferSize - 1)) != 0))
-    throw new IllegalArgumentException("initialBufferSize should be power of two")
+  /** Compatible constructor: manual trim policy. */
+  def this(mc: MiscCallback[M], initialBufferSize: Int, savedBuffer: ByteBuffer) =
+    this(mc, initialBufferSize, savedBuffer, TrimPolicy.Manual)
 
-  private val idb = IdBuilder()
-  private val hashStack = new HashBuilder()
+  if ((initialBufferSize < 2) || ((initialBufferSize & (initialBufferSize - 1)) != 0))
+    throw RenderException.invalidArgument("initialBufferSize should be a power of two of at least 2")
+  if (initialBufferSize > MaxBufferSize)
+    throw RenderException.invalidArgument(s"initialBufferSize exceeds $MaxBufferSize")
+
+  private val idb = IdBuilder(MaxDepth + 1)
+  private val hashStack = new HashBuilder(MaxDepth + 1)
   private var attrsOpened = false
+
+  // Lifecycle flags (see the format comment above).
+  private var lhsFinalized = false
+  private var rhsFinalized = true
+  private var lhsStale = false
 
   private var buffer: ByteBuffer = _
   private var lhs: ByteBuffer = _
   private var rhs: ByteBuffer = _
 
-  // Restore saved buffer if it exists
-  if (savedBuffer != null) {
-    savedBuffer.clear()
-    val lhsPos = savedBuffer.getInt
-    val lhsLimit = savedBuffer.getInt
-    val rhsPos = savedBuffer.getInt
-    val rhsLimit = savedBuffer.getInt
-    buffer = ByteBuffer.allocate(savedBuffer.capacity() - 16)
-    buffer.put(savedBuffer)
-    buffer.clear()
-    // Restore lhs and rhs
-    buffer.limit(buffer.capacity() / 2)
-    lhs = buffer.slice()
-    lhs.position(lhsPos)
-    lhs.limit(lhsLimit)
-    lhs.order(ByteOrder.nativeOrder())
-    buffer.position(buffer.capacity() / 2)
-    buffer.limit(buffer.capacity())
-    rhs = buffer.slice()
-    rhs.order(ByteOrder.nativeOrder())
-    rhs.position(rhsPos)
-    rhs.limit(rhsLimit)
-  } else {
-    resizeBuffer(0)
-  }
+  // Consecutive publishes whose baseline used little of its half (automatic trim policy).
+  private var idleSwaps = 0
+
+  if (savedBuffer != null) restore(savedBuffer)
+  else resizeBuffer(0)
 
   def openNode(xmlns: XmlNs, name: String): Unit = {
+    NameValidator.checkTagName(name)
+    ensureWritable()
     closeAttrs()
-    attrsOpened = true
+    requestResize(OpOpenSize + name.length * 2)
+    // Both id checks run before either counter moves, so a failure leaves ids untouched.
+    idb.ensureCanDescend()
     idb.incId()
     idb.incLevel()
-    requestResize(OpOpenSize + name.length * 4)
+    attrsOpened = true
     lhs.put(OpOpen.toByte)
     hashStack.open(lhs)
-//    lhs.putInt(0) // sum
-//    lhs.putInt(0) // end
-//    lhs.put(xmlns.code) // code of xmlns
-//    lhs.putInt(name.hashCode) // hash of name
-//    lhs.put((name.length * 2).toByte) // length in chars of name
-//    putToBuffer(lhs, name)
-    val memCacheId = xmlns.hashCode ^ name.hashCode
-    val memCacheLocal = getLocalHeadersCache
-    var memCache = memCacheLocal(memCacheId)
-    if (memCache == null) {
-      val x = ByteBuffer.allocate(32).order(ByteOrder.nativeOrder())
-      x.putInt(0) // sum
-      x.putInt(0) // end
-      x.put(xmlns.code) // code of xmlns
-      x.putInt(name.hashCode) // hash of name
-      StringHelper.putToBuffer(x, name, false)
-      x.flip()
-      memCacheLocal.update(memCacheId, x)
-      memCache = x
-    }
-    lhs.put(memCache)
-    memCache.rewind()
+    lhs.putInt(0) // sum
+    lhs.putInt(0) // length
+    lhs.put(xmlns.code)
+    lhs.putInt(Hashing.nameHash(name))
+    StringHelper.putToBuffer(lhs, name, false)
   }
 
   def closeNode(name: String): Unit = {
+    ensureWritable()
+    if (!hashStack.nonEmpty)
+      throw RenderException.invalidState("closeNode without a matching openNode")
     closeAttrs()
-    idb.decLevel()
     requestResize(OpSize)
+    idb.decLevel()
     lhs.put(OpClose.toByte)
     hashStack.close(lhs)
   }
 
   private def setAttrOrStyle(xmlNs: Byte, name: String, value: String, isStyle: Byte): Unit = {
-    requestResize(OpAttrSize + (name.length * 2 + value.length * 2) * 2)
-    val memCacheId = xmlNs.hashCode ^ name.hashCode
-    val memCacheLocal = getLocalHeadersCache
-    var memCache = memCacheLocal(memCacheId)
-    if (memCache == null) {
-      val x = ByteBuffer.allocate(64).order(ByteOrder.nativeOrder())
-      x.put(OpAttr.toByte)
-      x.put(xmlNs)
-      x.putInt(MurmurHash3.stringHash(name))
-      StringHelper.putToBuffer(x, name, false)
-      x.put(isStyle) // this is not a style
-      x.flip()
-      memCacheLocal.update(memCacheId, x)
-      memCache = x
-    }
-    lhs.put(memCache)
-    memCache.rewind()
-    lhs.putInt(MurmurHash3.stringHash(value))
+    if (isStyle == 1) NameValidator.checkStyleName(name)
+    else NameValidator.checkAttrName(name)
+    checkValueLength(value, "attribute value")
+    ensureWritable()
+    if (!attrsOpened)
+      throw RenderException.invalidState("setAttr/setStyle is only allowed directly after openNode")
+    requestResize(OpAttrSize + name.length * 2 + value.length * 2)
+    lhs.put(OpAttr.toByte)
+    lhs.put(xmlNs)
+    lhs.putInt(Hashing.nameHash(name))
+    StringHelper.putToBuffer(lhs, name, false)
+    lhs.put(isStyle)
+    lhs.putInt(Hashing.valueHash(value))
     StringHelper.putToBuffer(lhs, value, true)
-//    lhs.put(OpAttr.toByte)
-//    lhs.put(xmlNs.code)
-//    lhs.putInt(name.hashCode)
-//    lhs.put((name.length * 2).toByte) // length in chars of name
-//    putToBuffer(lhs, name)
-//    lhs.put(0.toByte) // this is not a style
-//    lhs.putInt(bytes.length)
-//    lhs.put(bytes)
   }
 
   def setAttr(xmlNs: XmlNs, name: String, value: String): Unit =
@@ -178,62 +163,256 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
     setAttrOrStyle(0.toByte, name, value, 1.toByte)
 
   def addTextNode(text: String): Unit = {
+    checkValueLength(text, "text")
+    ensureWritable()
     closeAttrs()
+    requestResize(OpTextSize + text.length * 2)
     idb.incId()
-    requestResize(OpTextSize + text.length * 4)
     val p = lhs.position()
     lhs.put(OpText.toByte)
-    lhs.putInt(MurmurHash3.stringHash(text)) // string hash
+    lhs.putInt(Hashing.valueHash(text)) // string hash
     StringHelper.putToBuffer(lhs, text, true)
     hashStack.hashText(lhs, p)
   }
 
   def addMisc(misc: M): Unit = {
+    if (!idb.hasParent)
+      throw RenderException.invalidState("addMisc is only allowed inside a node")
     idb.decLevelTmp()
-    mc(idb.mkId, misc)
-    idb.incLevel()
+    try mc(idb.mkId, misc)
+    finally idb.incLevel()
   }
 
-  /** Swap buffers */
+  /**
+    * Swap buffers: the finalized document becomes the baseline. The buffer
+    * that held the old baseline is cleared by the next render operation.
+    * Content is not touched here, so `swap(); diff(); swap()` can replay a
+    * diff in the other direction.
+    */
   def swap(): Unit = {
+    if (!lhsFinalized) {
+      if (lhs.position() > 0 || hashStack.nonEmpty)
+        throw RenderException.invalidState("swap() while a document is under construction; call finalizeDocument() or reset() first")
+      // An empty construction buffer reads as an empty document.
+      lhs.flip()
+      lhsFinalized = true
+    }
     val t = rhs
     rhs = lhs
     lhs = t
+    val f = rhsFinalized
+    rhsFinalized = lhsFinalized
+    lhsFinalized = f
+    lhsStale = true
+    trimPolicy match {
+      case TrimPolicy.Automatic(after, slack) =>
+        // Shrink only after `after` consecutive small baselines, so one small render between large ones does not reallocate.
+        if (rhs.limit().toLong * slack < lhs.capacity()) {
+          idleSwaps += 1
+          if (idleSwaps >= after) { trim(); idleSwaps = 0 }
+        } else idleSwaps = 0
+      case TrimPolicy.Manual => ()
+    }
   }
 
-  /** Cleanup current buffer */
-  def reset(): Unit = {
-    idb.reset()
-    lhs.position(0)
-    while (lhs.hasRemaining())
-      lhs.put(0.toByte)
+  /** Capacity of the backing buffer (both halves), in bytes. */
+  def bufferCapacity: Int = buffer.capacity()
+
+  /** Bytes used by the current baseline. */
+  def baselineSize: Int = rhs.limit()
+
+  /**
+    * Shrinks the backing buffer to the smallest power of two that holds the
+    * baseline twice over (and at least `initialBufferSize`). Allowed between
+    * render cycles only, when nothing is under construction. The baseline is
+    * copied; the construction buffer starts empty. Returns true when the
+    * buffer was reallocated.
+    */
+  def trim(): Boolean = {
+    if (!lhsStale && !lhsFinalized && (lhs.position() > 0 || hashStack.nonEmpty))
+      throw RenderException.invalidState("trim() while a document is under construction")
+    if (lhsFinalized && !lhsStale)
+      throw RenderException.invalidState("trim() is only allowed after swap() or reset()")
+    val used = rhs.limit().toLong
+    // The growth seed is at least 1 so the loop terminates for every accepted capacity.
+    var half = Math.max(1L, (initialBufferSize / 2).toLong)
+    while (half < used * 2) half *= 2
+    val newSize = (half * 2).toInt
+    if (newSize >= buffer.capacity()) false
+    else {
+      val old = rhs
+      buffer = ByteBuffer.allocate(newSize).order(ByteOrder.nativeOrder())
+      buffer.limit(newSize / 2)
+      lhs = buffer.slice().order(ByteOrder.nativeOrder())
+      buffer.position(newSize / 2)
+      buffer.limit(newSize)
+      rhs = buffer.slice().order(ByteOrder.nativeOrder())
+      old.position(0)
+      rhs.put(old)
+      rhs.flip()
+      prepareLhs()
+      true
+    }
+  }
+
+  /**
+    * Discard whatever `lhs` holds and restore a clean construction state.
+    * The baseline (`rhs`) is untouched. Call it after an exception during
+    * rendering before rendering again.
+    */
+  def reset(): Unit = prepareLhs()
+
+  private def prepareLhs(): Unit = {
     lhs.clear()
+    idb.reset()
+    hashStack.clear()
+    attrsOpened = false
+    lhsFinalized = false
+    lhsStale = false
   }
 
+  private def ensureWritable(): Unit =
+    if (lhsStale) prepareLhs()
+    else if (lhsFinalized)
+      throw RenderException.invalidState("document is finalized; call swap() or reset() before rendering again")
+
+  /**
+    * Snapshot of both buffers in saved-buffer format version 2. Only used
+    * regions are copied. Allowed between render cycles: when `lhs` is
+    * finalized, stale (just swapped out) or empty; a stale buffer is saved
+    * as an empty construction buffer. The returned buffer is owned by the
+    * caller.
+    *
+    * Format: `AVCT` magic, version byte, byte-order byte (0 little, 1 big),
+    * lhs-finalized byte, reserved byte, lhs length, rhs length, lhs bytes,
+    * rhs bytes. Integers use the recorded byte order.
+    */
   def save(): ByteBuffer = {
-    // capacity + 4 + 4 where 4 sizes of lhs and rhs
-    val buff = ByteBuffer.allocate(buffer.capacity() + 16)
-    val lhsPos = lhs.position()
-    val rhsPos = rhs.position()
-    buff.putInt(lhsPos)
-    buff.putInt(lhs.limit())
-    buff.putInt(rhsPos)
-    buff.putInt(rhs.limit())
-    buff.put(lhs)
-    buff.put(rhs)
-    buff.clear()
-    // Restore positions
-    lhs.position(lhsPos)
-    rhs.position(rhsPos)
-    buff
+    if (!lhsFinalized && (lhs.position() > 0 || hashStack.nonEmpty))
+      throw RenderException.invalidState("save() is only allowed when the document is finalized or empty")
+    val lhsFinalizedLive = lhsFinalized && !lhsStale
+    val lhsLen = if (lhsFinalizedLive) lhs.limit() else 0
+    val rhsLen = rhs.limit()
+    val out = ByteBuffer.allocate(SavedHeaderSize + lhsLen + rhsLen).order(ByteOrder.nativeOrder())
+    out.put(SavedMagic)
+    out.put(SavedFormatVersion.toByte)
+    out.put(if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) 1.toByte else 0.toByte)
+    out.put(if (lhsFinalizedLive) 1.toByte else 0.toByte)
+    out.put(0.toByte)
+    out.putInt(lhsLen)
+    out.putInt(rhsLen)
+    copyRegion(lhs, lhsLen, out)
+    copyRegion(rhs, rhsLen, out)
+    out.rewind()
+    out
+  }
+
+  private def copyRegion(source: ByteBuffer, length: Int, target: ByteBuffer): Unit = {
+    // `duplicate` keeps the live buffer's position and limit untouched.
+    val view = source.duplicate()
+    view.position(0)
+    view.limit(length)
+    target.put(view)
+  }
+
+  /**
+    * Restores a snapshot made by [[save]]. The source is copied; its position
+    * and limit are left unchanged. Both tapes are validated before they are
+    * adopted, so a malformed snapshot fails here instead of corrupting a
+    * later diff.
+    */
+  private def restore(saved: ByteBuffer): Unit = {
+    val src = saved.duplicate()
+    src.clear()
+    if (src.remaining() < SavedHeaderSize)
+      throw RenderException.invalidSavedBuffer("shorter than the header")
+    var i = 0
+    while (i < SavedMagic.length) {
+      if (src.get() != SavedMagic(i)) throw RenderException.invalidSavedBuffer("bad magic")
+      i += 1
+    }
+    val version = src.get()
+    if (version != SavedFormatVersion)
+      throw RenderException.invalidSavedBuffer(s"unsupported format version $version")
+    val order = if (src.get() == 1.toByte) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
+    if (order != ByteOrder.nativeOrder())
+      throw RenderException.invalidSavedBuffer("byte order does not match this platform")
+    src.order(order)
+    val finalizedFlag = src.get()
+    if (finalizedFlag != 0 && finalizedFlag != 1)
+      throw RenderException.invalidSavedBuffer("invalid lhs state flag")
+    src.get() // reserved
+    val lhsLen = src.getInt()
+    val rhsLen = src.getInt()
+    if (lhsLen < 0 || rhsLen < 0 || lhsLen.toLong + rhsLen != src.remaining())
+      throw RenderException.invalidSavedBuffer("region lengths do not match the buffer size")
+    if (finalizedFlag == 0 && lhsLen != 0)
+      throw RenderException.invalidSavedBuffer("unfinalized lhs with content")
+
+    val half = {
+      var h = Math.max(1L, (initialBufferSize / 2).toLong)
+      val needed = Math.max(lhsLen, rhsLen).toLong
+      while (h < needed) h *= 2
+      if (h * 2 > MaxBufferSize) throw RenderException.limit(s"saved buffer exceeds $MaxBufferSize bytes")
+      h.toInt
+    }
+    buffer = ByteBuffer.allocate(half * 2).order(ByteOrder.nativeOrder())
+    buffer.limit(half)
+    lhs = buffer.slice().order(ByteOrder.nativeOrder())
+    buffer.position(half)
+    buffer.limit(half * 2)
+    rhs = buffer.slice().order(ByteOrder.nativeOrder())
+
+    src.limit(src.position() + lhsLen)
+    lhs.put(src)
+    src.limit(src.position() + rhsLen)
+    rhs.put(src)
+
+    TapeValidator.validate(lhs, 0, lhsLen, MaxDepth, NameValidator.MaxNameLength * 2)
+    TapeValidator.validate(rhs, 0, rhsLen, MaxDepth, NameValidator.MaxNameLength * 2)
+
+    lhs.position(0)
+    if (finalizedFlag == 1) lhs.limit(lhsLen) else lhs.limit(half)
+    rhs.position(0)
+    rhs.limit(rhsLen)
+    lhsFinalized = finalizedFlag == 1
+    rhsFinalized = true
+    lhsStale = false
   }
 
   def finalizeDocument(): Unit = {
+    if (lhsStale) prepareLhs()
+    if (lhsFinalized)
+      throw RenderException.invalidState("document already finalized")
+    if (hashStack.nonEmpty)
+      throw RenderException.invalidState(s"finalizeDocument() with ${hashStack.depth} unclosed node(s)")
     lhs.flip()
     idb.reset()
+    lhsFinalized = true
   }
 
+  /**
+    * Emits the operations that turn the baseline into the finalized document.
+    * Both buffers are only read, so `diff` can be repeated. If the performer
+    * throws, the buffers and ids are restored and the exception propagates.
+    */
   def diff(performer: FastChangesPerformer): Unit = {
+    if (!lhsFinalized)
+      throw RenderException.invalidState("finalizeDocument() must be called before diff()")
+    lhs.rewind()
+    rhs.rewind()
+    idb.reset()
+    try diffLoop(performer)
+    finally {
+      lhs.rewind()
+      rhs.rewind()
+      // Make `DiffRenderContext` safe to reuse after diff.
+      // (Rendering expects IdBuilder to start from a clean state.)
+      idb.reset()
+    }
+  }
+
+  private def diffLoop(performer: FastChangesPerformer): Unit = {
 
     // `diff` mutates IdBuilder while traversing the tree.
     //
@@ -250,22 +429,31 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
       val opB = getOp(rhs)
       if (opA == OpOpen && opB == OpOpen) {
         idb.incId()
-        val sumA = readSum(lhs)
-        val endA = readEnd(lhs)
-        val sumB = readSum(rhs)
-        val endB = readEnd(rhs)
-        if (sumA != sumB) {
+        val startA = lhs.position()
+        val startB = rhs.position()
+        val sumA = lhs.getInt()
+        val endA = startA + lhs.getInt()
+        val sumB = rhs.getInt()
+        val endB = startB + rhs.getInt()
+        if (sumA == sumB && regionsEqual(lhs, startA, endA - startA, rhs, startB, endB - startB)) {
+          // Byte-identical subtrees: nothing changed below this node.
+          lhs.position(endA)
+          rhs.position(endB)
+        } else {
           val aXmlNs = lhs.get
           val aTagHash = lhs.getInt
-          val aTagLength = lhs.get
+          val aTagLength = StringHelper.readNameLength(lhs)
           val aTagOffset = lhs.position()
           lhs.position(aTagOffset + aTagLength)
           val bXmlNs = rhs.get
           val bTagHash = rhs.getInt
-          val bTagLength = rhs.get
+          val bTagLength = StringHelper.readNameLength(rhs)
           val bTagOffset = rhs.position()
           rhs.position(bTagOffset + bTagLength)
-          if (aTagHash != bTagHash || aXmlNs != bXmlNs) {
+          val sameTag =
+            aXmlNs == bXmlNs && aTagHash == bTagHash &&
+              regionsEqual(lhs, aTagOffset, aTagLength, rhs, bTagOffset, bTagLength)
+          if (!sameTag) {
             performer.create(idb, XmlNs.fromCode(aXmlNs), lhs, aTagOffset, aTagLength)
             rhs.position(endB)
             idb.incLevel()
@@ -275,15 +463,12 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
             compareAttrs(performer)
             idb.incLevel()
           }
-        } else {
-          lhs.position(endA)
-          rhs.position(endB)
         }
       } else if (opA == OpText && opB == OpText) {
         idb.incId()
         if (!compareTexts()) {
           skipText(rhs)
-          lhs.getInt // TODO this is may be removed via adding skipTextBody
+          lhs.getInt // hash
           val textLength = lhs.getInt()
           val textOffset = lhs.position()
           lhs.position(textOffset + textLength)
@@ -293,20 +478,19 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
           skipText(rhs)
         }
       } else if (opA == OpText && opB == OpOpen) {
-        lhs.getInt
+        lhs.getInt // hash
         val aTextLength = lhs.getInt()
         val aTextOffset = lhs.position()
         lhs.position(aTextOffset + aTextLength)
         idb.incId()
         performer.createText(idb, lhs, aTextOffset, aTextLength)
-        readSum(rhs)
-        rhs.position(readEnd(rhs))
+        skipNode(rhs)
       } else if (opA == OpOpen && opB == OpText) {
-        val sumA = readSum(lhs)
-        val endA = readEnd(lhs)
+        lhs.getInt // sum
+        lhs.getInt // length
         val aXmlNs = lhs.get
         val aTagHash = lhs.getInt
-        val aTagLength = lhs.get
+        val aTagLength = StringHelper.readNameLength(lhs)
         val aTagOffset = lhs.position()
         lhs.position(aTagOffset + aTagLength)
         idb.incId()
@@ -325,18 +509,20 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
         unOp(lhs)
         createLoop(lhs, performer)
         decLevelSafely()
+      } else {
+        // Both tapes were validated on construction, so this means an engine defect, not bad input.
+        throw RenderException.invalidState(s"unexpected operations $opA/$opB at ${lhs.position()}/${rhs.position()}")
       }
     }
-
-    lhs.rewind()
-    rhs.rewind()
-
-    // Make `DiffRenderContext` safe to reuse after diff.
-    // (Rendering expects IdBuilder to start from a clean state.)
-    idb.reset()
   }
 
   def currentId: Id = idb.mkId
+
+  /** Test seam: content hash of the first root node of the finalized document. Read-only. */
+  private[avocet] def finalizedRootSum: Int = {
+    if (!lhsFinalized) throw RenderException.invalidState("document is not finalized")
+    lhs.getInt(1)
+  }
 
   def currentContainerId: Id = {
     idb.decLevelTmp()
@@ -361,16 +547,21 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
     }
   }
 
+  private def checkValueLength(value: String, kind: String): Unit =
+    if (value.length > MaxTextLength)
+      throw RenderException.limit(s"$kind length ${value.length} exceeds $MaxTextLength chars")
+
   private def getOp(x: ByteBuffer): Byte = {
     if (x.hasRemaining) x.get()
     else OpEnd.toByte
   }
 
-  private def readSum(x: ByteBuffer): Int =
-    x.getInt()
-
-  private def readEnd(x: ByteBuffer): Int =
-    x.getInt()
+  /** Skips a node whose OPEN byte has already been consumed. */
+  private def skipNode(x: ByteBuffer): Unit = {
+    val start = x.position()
+    x.getInt() // sum
+    x.position(start + x.getInt())
+  }
 
   private def skipText(x: ByteBuffer): Unit = {
     x.getInt // hash
@@ -412,7 +603,7 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
           idb.decLevelTmp()
           val attrXmlNs = x.get
           val attrNameHash = x.getInt
-          val attrNameLength = x.get
+          val attrNameLength = StringHelper.readNameLength(x)
           val attrNameOffset = x.position()
           x.position(attrNameOffset + attrNameLength)
           val isStyle = readIsStyle(x)
@@ -432,11 +623,11 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
           performer.createText(idb, x, textOffset, textLength)
         case OpOpen =>
           idb.incId()
-          readSum(x)
-          readEnd(x)
+          x.getInt() // sum
+          x.getInt() // length
           val aXmlNs = x.get
           val aTagHash = x.getInt
-          val aTagLength = x.get
+          val aTagLength = StringHelper.readNameLength(x)
           val aTagOffset = x.position()
           x.position(aTagOffset + aTagLength)
           performer.create(idb, XmlNs.fromCode(aXmlNs), x, aTagOffset, aTagLength)
@@ -451,8 +642,7 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
     while (continue) {
       (getOp(x): @switch) match {
         case OpOpen =>
-          readSum(x)
-          x.position(readEnd(x))
+          skipNode(x)
           idb.incId()
           performer.remove(idb)
         case OpText =>
@@ -464,64 +654,38 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
     }
   }
 
-//  private val attrsDiffMap = IntStringMap.ofSize(diffIdentSetSize)
+  /** Exact comparison of two encoded regions. */
+  private def regionsEqual(a: ByteBuffer, aOffset: Int, aLength: Int, b: ByteBuffer, bOffset: Int, bLength: Int): Boolean = {
+    if (aLength != bLength) false
+    else {
+      var i = 0
+      var equal = true
+      while (equal && i < aLength) {
+        equal = a.get(aOffset + i) == b.get(bOffset + i)
+        i += 1
+      }
+      equal
+    }
+  }
+
+  /** Reads an attribute header on `x` and returns the name offset; the cursor stops after `isStyle`. */
+  private def sameAttrName(aXmlNs: Byte, aNameHash: Int, aNameOffset: Int, aNameLength: Int, aIsStyle: Boolean,
+                           bXmlNs: Byte, bNameHash: Int, bNameOffset: Int, bNameLength: Int, bIsStyle: Boolean): Boolean =
+    aIsStyle == bIsStyle && aXmlNs == bXmlNs && aNameHash == bNameHash &&
+      regionsEqual(lhs, aNameOffset, aNameLength, rhs, bNameOffset, bNameLength)
 
   private def compareAttrs(performer: FastChangesPerformer): Unit = {
-    // TODO maybe it make sence to chose algorithm depend attrs length and shape
-    val startPosA = lhs.position()
-    val startPosB = rhs.position()
-//    // Let's find attrs to add
-//    while (checkAttr(rhs)) {
-//      val attrName = readAttrRaw(rhs)
-//      readAttrXmlNs(rhs)
-//      readIsStyle(rhs)
-//      val value = readAttrText(rhs)
-//      attrsDiffMap.update(attrName, value)
-//    }
-//    while (checkAttr(lhs)) {
-//      val name = readAttrRaw(lhs)
-//      val ns = readAttrXmlNs(lhs)
-//      val isStyle = readIsStyle(lhs)
-//      val value = readAttrText(lhs)
-//      val oldValue = attrsDiffMap(name)
-//      if (oldValue == null || oldValue != value) {
-//        if (isStyle) performer.setStyle(idb, idents(name), value)
-//        else performer.setAttr(idb, idents(ns), idents(name), value)
-//      }
-//    }
-//    // Lets find attrs to remove
-//    lhs.position(startPosA)
-//    rhs.position(startPosB)
-//    attrsDiffMap.clear()
-//    while (checkAttr(lhs)) {
-//      val attrName = readAttrRaw(lhs)
-//      readAttrXmlNs(lhs)
-//      readIsStyle(lhs)
-//      val value = readAttrText(lhs)
-//      attrsDiffMap.update(attrName, value)
-//    }
-//    while (checkAttr(rhs)) {
-//      val name = readAttrRaw(rhs)
-//      val ns = readAttrXmlNs(rhs)
-//      val isStyle = readIsStyle(rhs)
-//      val value = readAttrText(rhs)
-//      val oldValue = attrsDiffMap(name)
-//      if (oldValue == null) {
-//        if (isStyle) performer.removeStyle(idb, idents(name))
-//        else performer.removeAttr(idb, idents(ns), idents(name))
-//      }
-//    }
-//    attrsDiffMap.clear()
-
     // O(n*m) implementation
     // Real word test shows that this implementation is faster.
     // -----
+    val startPosA = lhs.position()
+    val startPosB = rhs.position()
     // Check the attrs were removed
     while (checkAttr(rhs)) {
-      // Read tag name from rhs
+      // Read attr name from rhs
       val bXmlNs = rhs.get()
       val bNameHash = rhs.getInt()
-      val bNameLength = rhs.get()
+      val bNameLength = StringHelper.readNameLength(rhs)
       val bNameOffset = rhs.position()
       rhs.position(bNameOffset + bNameLength)
       val isStyleB = readIsStyle(rhs)
@@ -531,12 +695,12 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
       while (needToRemove && checkAttr(lhs)) {
         val aXmlNs = lhs.get()
         val aNameHash = lhs.getInt()
-        val aNameLength = lhs.get()
+        val aNameLength = StringHelper.readNameLength(lhs)
         val aNameOffset = lhs.position()
         lhs.position(aNameOffset + aNameLength)
         val isStyleA = readIsStyle(lhs)
         skipAttrText(lhs)
-        if (aNameHash == bNameHash && aXmlNs == bXmlNs && isStyleA == isStyleB)
+        if (sameAttrName(aXmlNs, aNameHash, aNameOffset, aNameLength, isStyleA, bXmlNs, bNameHash, bNameOffset, bNameLength, isStyleB))
           needToRemove = false
       }
       if (needToRemove) {
@@ -544,13 +708,13 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
         else performer.removeAttr(idb, XmlNs.fromCode(bXmlNs), rhs, bNameOffset, bNameLength)
       }
     }
-    // Check the attrs were added
+    // Check the attrs were added or changed
     val endPosB = rhs.position()
     lhs.position(startPosA)
     while (checkAttr(lhs)) {
       val aXmlNs = lhs.get()
       val aNameHash = lhs.getInt()
-      val aNameLength = lhs.get()
+      val aNameLength = StringHelper.readNameLength(lhs)
       val aNameOffset = lhs.position()
       lhs.position(aNameOffset + aNameLength)
       val isStyleA = readIsStyle(lhs)
@@ -558,40 +722,47 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
       val aValueLength = lhs.getInt()
       val aValueOffset = lhs.position()
       var needToSet = true
+      var searching = true
       rhs.position(startPosB)
-      while (needToSet && checkAttr(rhs)) {
+      while (searching && checkAttr(rhs)) {
         val bXmlNs = rhs.get()
         val bNameHash = rhs.getInt()
-        val bNameLength = rhs.get()
+        val bNameLength = StringHelper.readNameLength(rhs)
         val bNameOffset = rhs.position()
         rhs.position(bNameOffset + bNameLength)
         val isStyleB = readIsStyle(rhs)
         val bValueHash = rhs.getInt()
-        val valueLenB = rhs.getInt()
-        val valuePosB = rhs.position()
-        // First condition: name of attributes should be equals
-        needToSet = aNameHash != bNameHash || aXmlNs != bXmlNs || isStyleA != isStyleB || aValueHash != bValueHash
-        rhs.position(valuePosB + valueLenB)
+        val bValueLength = rhs.getInt()
+        val bValueOffset = rhs.position()
+        rhs.position(bValueOffset + bValueLength)
+        if (sameAttrName(aXmlNs, aNameHash, aNameOffset, aNameLength, isStyleA, bXmlNs, bNameHash, bNameOffset, bNameLength, isStyleB)) {
+          // Same attribute in the baseline: set it only if the value really differs.
+          searching = false
+          needToSet = !(aValueHash == bValueHash &&
+            regionsEqual(lhs, aValueOffset, aValueLength, rhs, bValueOffset, bValueLength))
+        }
       }
+      lhs.position(aValueOffset + aValueLength)
       if (needToSet) {
-        lhs.position(aValueOffset + aValueLength)
         if (isStyleA) performer.setStyle(idb, lhs, aNameOffset, aNameLength, aValueOffset, aValueLength)
         else performer.setAttr(idb, XmlNs.fromCode(aXmlNs), lhs, aNameOffset, aNameLength, aValueOffset, aValueLength)
-      } else {
-        lhs.position(aValueOffset + aValueLength)
       }
     }
     rhs.position(endPosB)
   }
 
+  /** Exact text comparison; cursors are left at the TEXT hash field. */
   private def compareTexts(): Boolean = {
     val startPosA = lhs.position()
     val startPosB = rhs.position()
     val aHash = lhs.getInt()
+    val aLength = lhs.getInt()
     val bHash = rhs.getInt()
+    val bLength = rhs.getInt()
+    val equal = aHash == bHash && regionsEqual(lhs, lhs.position(), aLength, rhs, rhs.position(), bLength)
     lhs.position(startPosA)
     rhs.position(startPosB)
-    aHash == bHash
+    equal
   }
 
   /* Check write to lhs is available */
@@ -601,22 +772,15 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
   }
 
   private def resizeBuffer(additionalSize: Int) = {
-    val oldSize =
-      if (buffer != null) buffer.capacity
-      else -1
-
-    val newSize = {
-      if (oldSize > 0) {
-        val totalAdditionalSize = oldSize + additionalSize
-        var size = oldSize
-        while (size < totalAdditionalSize) size = size * 2
-        size
-      }
-      else {
-        // Ignore additional size
-        initialBufferSize
-      }
-    }
+    // The active half must hold its current content plus the pending write;
+    // enough total capacity is not enough on its own.
+    val content = if (lhs == null) 0L else lhs.position().toLong
+    val neededHalf = content + additionalSize
+    var size: Long = if (buffer == null) initialBufferSize.toLong else buffer.capacity.toLong
+    while (size / 2 < neededHalf) size *= 2
+    if (size > MaxBufferSize)
+      throw RenderException.limit(s"render buffer would exceed $MaxBufferSize bytes")
+    val newSize = size.toInt
 
     buffer = ByteBuffer.allocate(newSize)
     buffer.order(ByteOrder.nativeOrder())
@@ -647,26 +811,48 @@ final class DiffRenderContext[-M](mc: MiscCallback[M], initialBufferSize: Int, s
 
 object DiffRenderContext {
 
-  private val headersCache = new ThreadLocal[IntByteBufferMap]()
-  private def getLocalHeadersCache = {
-    var result = headersCache.get()
-    if (result == null) {
-      result = IntByteBufferMap.ofSize(2048)
-      headersCache.set(result)
-    }
-    result
-  }
-
   final val DefaultDiffRenderContextBufferSize = 1024 * 64
+
+  /** Deepest supported element nesting; the root element has depth 1. */
+  final val MaxDepth = 255
+
+  /** Longest supported text node or attribute/style value, in UTF-16 chars. */
+  final val MaxTextLength = 1 << 24
+
+  /** Largest backing buffer (both halves together), in bytes. */
+  final val MaxBufferSize = 1 << 30
+
+  private[impl] val SavedMagic: Array[Byte] = Array('A'.toByte, 'V'.toByte, 'C'.toByte, 'T'.toByte)
+  private[impl] final val SavedFormatVersion = 2
+  private[impl] final val SavedHeaderSize = 16
 
   def apply[MiscType](
     onMisc: MiscCallback[MiscType] = (_: Id, _: MiscType) => (),
     initialBufferSize: Int = DefaultDiffRenderContextBufferSize,
-    savedBuffer: Option[ByteBuffer] = None
+    savedBuffer: Option[ByteBuffer] = None,
+    trimPolicy: TrimPolicy = TrimPolicy.Manual
   ): DiffRenderContext[MiscType] = {
-    new DiffRenderContext[MiscType](onMisc, initialBufferSize, savedBuffer.orNull)
+    new DiffRenderContext[MiscType](onMisc, initialBufferSize, savedBuffer.orNull, trimPolicy)
   }
 
+  /**
+    * The 1.0.0 factory signature, kept for binary compatibility: a consumer
+    * compiled against 1.0.0 calls this JVM method. Source code resolves to
+    * the overload above, which has the defaults.
+    */
+  def apply[MiscType](
+    onMisc: MiscCallback[MiscType],
+    initialBufferSize: Int,
+    savedBuffer: Option[ByteBuffer]
+  ): DiffRenderContext[MiscType] =
+    new DiffRenderContext[MiscType](onMisc, initialBufferSize, savedBuffer.orNull, TrimPolicy.Manual)
+
+  /**
+    * Fast performer. `id` and `source` are borrowed for the duration of the
+    * call: `id` is the engine's mutable id builder and `source` is the live
+    * tape. Copy what you need (`id.mkId`, the chars at the offsets) before
+    * returning; never retain the references.
+    */
   trait FastChangesPerformer {
     def remove(id: FastId): Unit
     def create(id: FastId, xmlNs: XmlNs, source: ByteBuffer, nameOffset: Int, nameLength: Int): Unit
@@ -677,6 +863,10 @@ object DiffRenderContext {
     def setStyle(id: FastId, source: ByteBuffer, nameOffset: Int, nameLength: Int, valueOffset: Int, valueLength: Int): Unit
   }
 
+  /**
+    * Convenience performer that decodes names and values into owned strings.
+    * `id` is still borrowed (see [[FastChangesPerformer]]).
+    */
   trait ChangesPerformer extends FastChangesPerformer {
     def removeAttr(id: FastId, xmlNs: String, name: String): Unit
     def removeStyle(id: FastId, name: String): Unit

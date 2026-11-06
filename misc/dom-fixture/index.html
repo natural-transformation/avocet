@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>avocet dom fixture</title>
+  <script>
+    // Custom element whose connectedCallback runs synchronously during DOM
+    // mutation; the fixture uses it to prove reentrant renders are rejected.
+    customElements.define('x-reentrant', class extends HTMLElement {
+      connectedCallback() { if (window.__avocetReentrant) window.__avocetReentrant(); }
+    });
+    // Its removal during disposal disposes and remounts the same target; the fixture checks nothing is orphaned.
+    customElements.define('x-remount', class extends HTMLElement {
+      disconnectedCallback() { if (window.__avocetOnDisconnect) window.__avocetOnDisconnect(); }
+    });
+  </script>
+</head>
+<body>
+  <script src="/dom-fixture/target/scala-3.3.7/avocet-dom-fixture-fastopt/main.js"></script>
+</body>
+</html>

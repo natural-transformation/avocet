@@ -127,3 +127,70 @@ object DefaultDslTest extends utest.TestSuite {
     )
   }
 }
+
+/**
+  * Operation-trace and evaluation-count checks: optimized and plain templates
+  * must emit the same operations in the same order, and dynamic expressions
+  * must be evaluated exactly once in both forms.
+  */
+object DslTraceTest extends utest.TestSuite {
+
+  import avocet.dsl._
+  import avocet.dsl.html._
+
+  def tests = {
+    import utest._
+    Tests {
+      "complex template: plain and optimized traces are identical" - {
+        val plain = OpRecorder.record(DefaultDslTest.complexTemplate1)
+        val optimized = OpRecorder.record(DefaultDslTest.optimizedComplexTemplate1)
+        assert(plain == optimized)
+        assert(plain.head == "open(html:div)")
+        assert(plain.contains("style(border=1 px solid)"))
+      }
+      "namespaces survive both forms" - {
+        import svg._
+        def doc(x: Int) = Svg(width := "10", TagDef(XmlNs.svg, "circle")(AttrDef(XmlNs.svg, "r") := x.toString))
+        def optimizedDoc(x: Int) = optimize(Svg(width := "10", TagDef(XmlNs.svg, "circle")(AttrDef(XmlNs.svg, "r") := x.toString)))
+        val plain = OpRecorder.record(doc(3))
+        val fast = OpRecorder.record(optimizedDoc(3))
+        assert(plain == fast)
+        assert(plain == Seq("open(svg:svg)", "attr(html:width=10)", "open(svg:circle)", "attr(svg:r=3)", "close(circle)", "close(svg)"))
+      }
+      "dynamic expressions are evaluated once in both forms" - {
+        var plainCount = 0
+        var optimizedCount = 0
+        val items = Seq(1, 2)
+        val opt = Option("o")
+        def plain = div(
+          clazz := { plainCount += 1; "c" },
+          opt.map(o => p({ plainCount += 1; o })),
+          items.map(i => span({ plainCount += 1; i.toString })))
+        def fast = optimize(div(
+          clazz := { optimizedCount += 1; "c" },
+          opt.map(o => p({ optimizedCount += 1; o })),
+          items.map(i => span({ optimizedCount += 1; i.toString }))))
+        val plainOps = OpRecorder.record(plain)
+        val fastOps = OpRecorder.record(fast)
+        assert(plainOps == fastOps)
+        assert(plainCount == 4)
+        assert(optimizedCount == 4)
+      }
+      "conditional and match forms agree" - {
+        def plain(flag: Boolean, o: Option[String]) = div(
+          if (flag) clazz := "yes" else void,
+          when(!flag)(span("no")),
+          o match { case Some(x) => p(x); case None => void })
+        def fast(flag: Boolean, o: Option[String]) = optimize(div(
+          if (flag) clazz := "yes" else void,
+          when(!flag)(span("no")),
+          o match { case Some(x) => p(x); case None => void }))
+        for ((flag, o) <- Seq((true, Some("a")), (false, None), (true, None), (false, Some("b")))) {
+          val p = OpRecorder.record(plain(flag, o))
+          val f = OpRecorder.record(fast(flag, o))
+          assert(p == f)
+        }
+      }
+    }
+  }
+}

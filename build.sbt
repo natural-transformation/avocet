@@ -242,6 +242,22 @@ lazy val dom = project
     )
   )
 
+lazy val domFixture = project
+  .in(file("dom-fixture"))
+  .enablePlugins(ScalaJSPlugin)
+  .settings(commonSettings: _*)
+  .settings(crossVersionSettings:_*)
+  .settings(dontPublishSettings: _*)
+  .dependsOn(dom)
+  .settings(
+    normalizedName := "avocet-dom-fixture",
+    // Browser fixture for the DOM adapter; see misc/dom-fixture/index.html.
+    scalaJSUseMainModuleInitializer := true,
+    libraryDependencies ++= Seq(
+      ("org.scala-js" %%% "scalajs-dom" % "1.1.0").cross(CrossVersion.for3Use2_13)
+    )
+  )
+
 lazy val bench = project
   .enablePlugins(JmhPlugin)
   .enablePlugins(SbtTwirl)
@@ -264,7 +280,7 @@ lazy val root = project
   .aggregate(
     coreJS, coreJVM,
     eventsJS, eventsJVM,
-    dom
+    dom, domFixture
   )
 
 // Don't use it for root project

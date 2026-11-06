@@ -79,6 +79,49 @@ object DslOptimizerMacro:
         $block
         $rc.closeNode($tagDef.name)
       }
+    // A lambda literal has no evaluation of its own, so its body can be inlined per element.
+    def isLambdaLiteral(f: Expr[Any]): Boolean =
+      f.asTerm.underlyingArgument match {
+        case Block(List(_: DefDef), Closure(_, _)) => true
+        case _ => false
+      }
+
+    // `opt.map(f)` in the plain form evaluates `opt` and `f` exactly once each.
+    def optionLowering[X, D <: Document[T]](rc: Expr[RenderContext[T]], opt: Expr[Option[X]], f: Expr[X => D])(using Type[X], Type[D]): Expr[Any] =
+      if isLambdaLiteral(f) then
+        '{
+          val o = $opt
+          if (o.nonEmpty) {
+            val x = o.get
+            ${aux(rc, Expr.betaReduce('{($f)(x)}).asExprOf[Document[T]])}
+          }
+        }
+      else
+        '{
+          val o = $opt
+          val fn = $f
+          if (o.nonEmpty) fn(o.get).apply($rc)
+        }
+
+    // `seq.map(f)` in the plain form evaluates `seq` and `f` exactly once each.
+    def seqLowering[X, D <: Document[T]](rc: Expr[RenderContext[T]], seq: Expr[Seq[X]], f: Expr[X => D])(using Type[X], Type[D]): Expr[Any] =
+      if isLambdaLiteral(f) then
+        '{
+          val i = $seq.iterator
+          while (i.hasNext) {
+            val x = i.next()
+            ${aux(rc, Expr.betaReduce('{($f)(x)}).asExprOf[Document[T]])}
+          }
+        }
+      else
+        '{
+          // Plain `seq.map(f)` evaluates the collection before the callback.
+          val seq0 = $seq
+          val fn = $f
+          val i = seq0.iterator
+          while (i.hasNext) fn(i.next()).apply($rc)
+        }
+
     def aux(rc: Expr[RenderContext[T]], targetExpr: Expr[Document[T]]): Expr[Any] = targetExpr match {
       // Optimize tag open/close
       case '{(${tagDef}: TagDef).apply[T](${Varargs(children)}:_*)} =>
@@ -87,59 +130,58 @@ object DslOptimizerMacro:
         else
           logUnableToOptimizeTerm(targetExpr.asTerm)
           '{$targetExpr.apply($rc)}
-      // Optimize attributes and styles
+      // Optimize attributes and styles. A dynamic receiver (definition or key
+      // expression) is bound once so it is evaluated exactly once, as in the plain form.
       case '{(${styleDef}: StyleDef).@=[T]($styleValue)} =>
-        '{$rc.setStyle($styleDef.name, $styleValue)}
+        '{ val d = $styleDef; $rc.setStyle(d.name, $styleValue) }
       case '{(${attrDef}: AttrDef).:=[T]($attrValue)} =>
-        '{$rc.setAttr($attrDef.ns, $attrDef.name, $attrValue)}
+        '{ val d = $attrDef; $rc.setAttr(d.ns, d.name, $attrValue) }
+      // Typed keys: the encoder runs once, at render time, like the plain form
+      case '{(${key}: AttrKey[a]).:=[T]($value)} =>
+        '{ val k = $key; $rc.setAttr(k.ns, k.name, k.encode($value)) }
+      case '{(${key}: BooleanAttrKey).:=[T]($present)} =>
+        '{ val k = $key; if ($present) $rc.setAttr(k.ns, k.name, "") }
+      case '{(${key}: StyleKey[a]).@=[T]($value)} =>
+        '{ val k = $key; $rc.setStyle(k.name, k.encode($value)) }
+      // Explicit fragment and iteration combinators
+      case '{fragment[T](${Varargs(nodes)}:_*)} =>
+        val xs = nodes.map(aux(rc, _)).toList
+        xs match {
+          case Nil => '{}
+          case x :: Nil => x
+          case _ => Expr.block(xs.dropRight(1), xs.last)
+        }
+      // Callbacks: a lambda literal is inlined; any other callback expression is
+      // evaluated once, outside the loop, and applied per element.
+      case '{each[T, a]($xs)($f)} =>
+        if isLambdaLiteral(f) then
+          '{
+            val i = $xs.iterator
+            while (i.hasNext) {
+              val x = i.next()
+              ${aux(rc, Expr.betaReduce('{($f)(x)}))}
+            }
+          }
+        else
+          '{
+            // Plain `each(xs)(f)` evaluates the collection before the callback.
+            val xs0 = $xs
+            val fn = $f
+            val i = xs0.iterator
+            while (i.hasNext) fn(i.next()).apply($rc)
+          }
+      case '{noNode} => '{}
+      case '{noAttr} => '{}
+      case '{noStyle} => '{}
       // Optimize converters
       case '{stringToNode($value)} => '{$rc.addTextNode($value)}
       case '{miscToNode[T]($value)} => '{$rc.addMisc($value)}
-      case '{optionToNode[T](($opt: Option[x]).map($f))} =>
-          '{
-            if ($opt.nonEmpty) {
-              val x = $opt.get
-              ${aux(rc, Expr.betaReduce('{($f)(x)}))}
-            }
-          }
-      case '{optionToAttr[T](($opt: Option[x]).map($f))} =>
-          '{
-            if ($opt.nonEmpty) {
-              val x = $opt.get
-              ${aux(rc, Expr.betaReduce('{($f)(x)}))}
-            }
-          }
-      case '{optionToStyle[T](($opt: Option[x]).map($f))} =>
-        '{
-          if ($opt.nonEmpty) {
-            val x = $opt.get
-            ${aux(rc, Expr.betaReduce('{($f)(x)}))}
-          }
-        }
-      case '{seqToNode[T](($seq: Seq[x]).map($f))} =>
-          '{
-            val i = $seq.iterator
-            while (i.hasNext) {
-              val x = i.next
-              ${aux(rc, Expr.betaReduce('{($f)(x)}))}
-            }
-          }
-      case '{seqToAttr[T](($seq: Seq[x]).map($f))} =>
-        '{
-          val i = $seq.iterator
-          while (i.hasNext) {
-            val x = i.next
-            ${aux(rc, Expr.betaReduce('{($f)(x)}))}
-          }
-        }
-      case '{seqToStyle[T](($seq: Seq[x]).map($f))} =>
-        '{
-          val i = $seq.iterator
-          while (i.hasNext) {
-            val x = i.next
-            ${aux(rc, Expr.betaReduce('{($f)(x)}))}
-          }
-        }
+      case '{optionToNode[T](($opt: Option[x]).map($f))} => optionLowering(rc, opt, f)
+      case '{optionToAttr[T](($opt: Option[x]).map($f))} => optionLowering(rc, opt, f)
+      case '{optionToStyle[T](($opt: Option[x]).map($f))} => optionLowering(rc, opt, f)
+      case '{seqToNode[T](($seq: Seq[x]).map($f))} => seqLowering(rc, seq, f)
+      case '{seqToAttr[T](($seq: Seq[x]).map($f))} => seqLowering(rc, seq, f)
+      case '{seqToStyle[T](($seq: Seq[x]).map($f))} => seqLowering(rc, seq, f)
       // Optimize empty nodes
       case '{void} => '{}
       case '{Empty} => '{}

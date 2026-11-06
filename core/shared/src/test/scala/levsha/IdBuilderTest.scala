@@ -62,3 +62,42 @@ object IdBuilderTest extends utest.TestSuite {
   }
 }
 
+
+object IdBuilderLimitsTest extends utest.TestSuite {
+
+  import utest._
+
+  def expectCode(code: RenderException.Code)(f: => Unit): Unit = {
+    val e = intercept[RenderException](f)
+    assert(e.code == code)
+  }
+
+  val tests = Tests {
+    test("sibling index stops at Short.MaxValue without wrapping") - {
+      val counter = IdBuilder()
+      var i = 0
+      while (i < IdBuilder.MaxSiblings) { counter.incId(); i += 1 }
+      assert(counter.mkString == "32767")
+      expectCode(RenderException.Code.LimitExceeded)(counter.incId())
+      assert(counter.mkString == "32767")
+    }
+    test("level stops at maxLevel and the failed call leaves the state untouched") - {
+      val counter = IdBuilder(3)
+      counter.incLevel()
+      counter.incLevel()
+      assert(counter.getLevel == 3)
+      expectCode(RenderException.Code.LimitExceeded)(counter.incLevel())
+      expectCode(RenderException.Code.LimitExceeded)(counter.ensureCanDescend())
+      assert(counter.getLevel == 3)
+      assert(counter.mkString == "0_0_0")
+    }
+    test("level underflow is an error instead of silent corruption") - {
+      val counter = IdBuilder()
+      expectCode(RenderException.Code.InvalidState)(counter.decLevel())
+      expectCode(RenderException.Code.InvalidState)(counter.decLevelTmp())
+    }
+    test("invalid maxLevel is rejected") - {
+      expectCode(RenderException.Code.InvalidArgument)(IdBuilder(0))
+    }
+  }
+}

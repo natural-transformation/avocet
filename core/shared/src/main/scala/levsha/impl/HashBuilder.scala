@@ -1,15 +1,26 @@
 package avocet.impl
 
 import java.nio.{ByteBuffer}
+import avocet.RenderException
 import scala.util.hashing.MurmurHash3
 
+/**
+  * Maintains the content hash (`sum`) and the length field of every open node
+  * while a document is written to the tape.
+  *
+  * The length is stored relative to the node's `sum` field, so two equal
+  * subtrees have byte-identical encodings wherever they sit in the buffer.
+  */
 class HashBuilder(private val posStack: Stack = new Stack(),
                   private var lastOpenPos: Int = 0) {
 
+  /** Builds a hash stack able to hold `capacity` nested open nodes. */
+  def this(capacity: Int) = this(new Stack(new Array[Int](capacity)), 0)
+
   def open(target: ByteBuffer): Unit = {
     val pos = target.position()
-    lastOpenPos = pos + 8
     posStack.push(pos)
+    lastOpenPos = pos + 8
   }
 
   def hashAttrs(target: ByteBuffer) = if (posStack.nonEmpty) {
@@ -49,23 +60,39 @@ class HashBuilder(private val posStack: Stack = new Stack(),
     // Save current hash to target
     hash = MurmurHash3.finalizeHash(hash, size)
     target.putInt(nodeStartPos, hash)
-    target.putInt(nodeStartPos + 4, nodeEndPos)
+    // Length of the node relative to its `sum` field (position independent)
+    target.putInt(nodeStartPos + 4, nodeEndPos - nodeStartPos)
     // Updated proper node hash
     if (posStack.nonEmpty) {
       val properHash = target.getInt(posStack.peek)
       target.putInt(posStack.peek, MurmurHash3.mix(properHash, hash))
     }
   }
+
+  /** Number of currently open nodes. */
+  def depth: Int = posStack.size
+
+  def nonEmpty: Boolean = posStack.nonEmpty
+
+  /** Forgets every open node. Used when a partially written document is discarded. */
+  def clear(): Unit = {
+    posStack.clear()
+    lastOpenPos = 0
+  }
 }
 
 private[impl] class Stack(val array: Array[Int] = new Array(256),
                     var i: Int = 0) {
   def push(v: Int): Unit = {
+    if (i >= array.length)
+      throw RenderException.limit(s"nesting depth exceeds ${array.length}")
     array(i) = v
     i = i + 1
   }
 
   def pop(): Int = {
+    if (i <= 0)
+      throw RenderException.invalidState("closeNode without a matching openNode")
     i = i - 1
     array(i)
   }
@@ -75,6 +102,11 @@ private[impl] class Stack(val array: Array[Int] = new Array(256),
 
   def nonEmpty: Boolean =
     i > 0
+
+  def size: Int = i
+
+  def clear(): Unit =
+    i = 0
 }
 /*
 ul(0
