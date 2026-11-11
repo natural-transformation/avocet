@@ -16,8 +16,8 @@ inapplicable law branches canceled.
 The pre-release candidate runs in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md)
 remain historical evidence; do not relabel them as published-artifact checks.
 F3 browser automation and the F4 CSS, HTML-profile and churn work were
-implemented on 2026-11-11 (sections 5–5.2), together with a fix for the stale
-node identity that an F4 probe found. F2 real-service cases (section 6) remain.
+delivered on 2026-11-11 in PR #2 (sections 5–5.2), together with a fix for the
+stale node identity that an F4 probe found. F2 real-service cases (section 6) remain.
 The release verification does not close that coverage gap.
 
 ## 1. Choose the work and preserve its scope
@@ -198,7 +198,8 @@ The [PR workflow](.github/workflows/pr.yml) runs the script after `sbt +test`. O
 Linux the shell also supplies the pinned Mesa EGL vendor, applied to the owned
 WebKit process only. That workflow used to target only `master`, which does not
 exist, so pull requests to `main` ran no CI at all; it now targets `main` too.
-Its first Linux run is still pending. `master.yml` still triggers on `master`
+Its first Linux run, on PR #2, passed: 50 checks in both engines and the
+self-test. `master.yml` still triggers on `master`
 only and publishes snapshots, so changing its trigger is a separate maintainer
 decision.
 

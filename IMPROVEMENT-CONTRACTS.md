@@ -342,7 +342,8 @@ Status 2026-11-11: implemented by the `.#browser` shell, `scripts/test-dom-fixtu
 `misc/dom-fixture/run-browsers.mjs` and its self-test, and a PR workflow step
 (§9.1). The gate passes locally on aarch64-darwin in Chromium 141 and WebKit 26,
 including the injected-failure and SIGINT/SIGTERM cleanup proofs. The first Linux
-CI run is pending, because the PR workflow previously targeted only `master`.
+CI run, on PR #2 (merged as `7b0d249`), passed in both engines with the
+self-test, so the F3 gate is closed.
 
 ### F4: bounded HTML conformance and CSS policy
 
