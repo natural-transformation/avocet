@@ -17,6 +17,8 @@ const faultCases = [
   { fault: 'failing-check', code: 1, expect: /FAIL first render builds the tree -- tampered/ },
   { fault: 'partial-results', code: 1, expect: /ERROR expected \d+ checks, got \d+/ },
   { fault: 'missing-results', code: 1, expect: /ERROR fixture did not publish results within 3000 ms/, env: { AVOCET_DOM_FIXTURE_TIMEOUT_MS: '3000' } },
+  { fault: 'null-report', code: 1, expect: /ERROR malformed fixture report: null/ },
+  { fault: 'malformed-report', code: 1, expect: /ERROR malformed fixture report: \{/ },
   { fault: 'page-error', code: 1, expect: /ERROR page error: injected page error/ },
 ];
 

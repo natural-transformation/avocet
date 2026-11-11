@@ -484,3 +484,17 @@ This resolves the stale-`vid` item listed as remaining above.
 - After: `scripts/test-dom-fixture.sh` PASS, fixture 50 of 50 in both engines
   and runner self-test 12 of 12; `sbt +test domFixture/fastLinkJS bench/compile`
   PASS (coreJVM 167 uTest plus 3 properties, coreJS 159 plus 3, dom 4).
+
+## Runner review fix (2026-11-11)
+
+- Finding (PR #2 review, P2): a page that published `null` passed with 0
+  checks. The completion wait accepted any value other than `undefined`, and
+  validation ran only for a truthy report. Reproduced in Chromium and WebKit
+  (`PASS (0 checks)`, exit 0). A `null` result entry instead crashed the
+  validation with a generic "runner failed" message.
+- Regression before the fix: the new self-test case `null-report` failed (exit 0).
+- Fix: every published value is validated; anything other than an object with a
+  numeric `failed` and `{name: string, ok: boolean}` results is reported as a
+  malformed fixture report.
+- After: `scripts/test-dom-fixture.sh` PASS: fixture 50 of 50 in both engines,
+  and self-test 16 of 16 with `null-report` and `malformed-report` added.

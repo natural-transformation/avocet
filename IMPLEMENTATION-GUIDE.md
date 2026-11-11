@@ -173,16 +173,17 @@ never load a stale module, and then runs two bounded steps:
 
 1. [run-browsers.mjs](misc/dom-fixture/run-browsers.mjs) serves the repository root
    on an OS-chosen loopback port and loads the existing HTML page in each engine.
-   It requires `window.avocetDomFixture` with exactly `EXPECTED_CHECKS` (currently
-   50) uniquely named results, all passing, and no page error, crash, failed
-   request or failed document/script response. It prints every check, failing
+   It requires a well-formed `window.avocetDomFixture` report (any other published
+   value, `null` included, fails) with exactly `EXPECTED_CHECKS` (currently 50)
+   uniquely named results, all passing, and no page error, crash, failed request
+   or failed document/script response. It prints every check, failing
    details, the engine version, the module timestamp and the source commit.
    Exit 1 is a check or protocol failure, 2 a setup failure, 130/143/129 an
    interruption.
 2. [runner-self-test.mjs](misc/dom-fixture/runner-self-test.mjs) proves that the
    runner fails closed. In both engines it injects a failing check, a dropped
-   result, results that never arrive and an uncaught page error; each run must
-   exit 1 with its message. It interrupts Chromium with SIGINT and WebKit with
+   result, results that never arrive, a `null` report, a malformed result entry
+   and an uncaught page error; each run must exit 1 with its message. It interrupts Chromium with SIGINT and WebKit with
    SIGTERM while they wait for results. After every run, passing runs included,
    the browser's process group and the server port must be gone; the interrupt
    cases first observe both alive, so the cleanup probe is not vacuous.

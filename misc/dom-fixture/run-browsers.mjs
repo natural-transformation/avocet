@@ -4,8 +4,9 @@
 // Direct use from the repository root, after `sbt domFixture/fastLinkJS`:
 //   nix develop .#browser --no-write-lock-file --command node misc/dom-fixture/run-browsers.mjs [chromium] [webkit]
 //
-// Each engine must publish `window.avocetDomFixture` with exactly
-// EXPECTED_CHECKS uniquely named results, all passing, and raise no page error.
+// Each engine must publish a well-formed `window.avocetDomFixture` report with
+// exactly EXPECTED_CHECKS uniquely named results, all passing, and raise no page
+// error. Any other published value, null included, fails.
 // Exit codes: 0 every engine passed; 1 a check or protocol failure; 2 a setup
 // failure; 130/143/129 interrupted by SIGINT/SIGTERM/SIGHUP. The runner owns
 // one loopback server and at most one browser process, and closes both on
@@ -42,6 +43,10 @@ const faults = {
   'partial-results': "(() => { let v; Object.defineProperty(window, 'avocetDomFixture', { configurable: true, get: () => v, set(x) { x.results.pop(); v = x; } }); })();",
   // Results never published: the completion deadline must fail.
   'missing-results': "Object.defineProperty(window, 'avocetDomFixture', { configurable: true, get: () => undefined, set() {} });",
+  // null published instead of the result object: the shape gate must fail.
+  'null-report': "(() => { let v; Object.defineProperty(window, 'avocetDomFixture', { configurable: true, get: () => v, set() { v = null; } }); })();",
+  // One result entry replaced by null: the shape gate must fail.
+  'malformed-report': "(() => { let v; Object.defineProperty(window, 'avocetDomFixture', { configurable: true, get: () => v, set(x) { x.results[0] = null; v = x; } }); })();",
   // An uncaught page error while every check passes.
   'page-error': "setTimeout(() => { throw new Error('injected page error'); }, 0);",
 };
@@ -103,10 +108,19 @@ function setupProblem() {
   return null;
 }
 
-/** Protocol gates on a published result object; returns the problems found. */
+/** The published shape: `{failed: number, results: [{name: string, ok: boolean, ...}]}`. */
+function wellFormed(report) {
+  return report !== null && typeof report === 'object' && typeof report.failed === 'number' &&
+    Array.isArray(report.results) &&
+    report.results.every(result => result !== null && typeof result === 'object' &&
+      typeof result.name === 'string' && typeof result.ok === 'boolean');
+}
+
+/** Protocol gates on whatever the page published, even null; returns the problems found. */
 function judge(report) {
+  if (!wellFormed(report)) return [`malformed fixture report: ${String(JSON.stringify(report)).slice(0, 200)}`];
   const problems = [];
-  const results = Array.isArray(report.results) ? report.results : [];
+  const results = report.results;
   if (results.length !== EXPECTED_CHECKS) problems.push(`expected ${EXPECTED_CHECKS} checks, got ${results.length}`);
   if (new Set(results.map(result => result.name)).size !== results.length) problems.push('check names are not unique');
   const failing = results.filter(result => result.ok !== true).length;
@@ -123,7 +137,9 @@ async function runEngine(name, baseUrl) {
     env.LIBGL_ALWAYS_SOFTWARE = 'true';
   }
   const problems = [];
-  let report = null;
+  // Whatever the page published; judged even when it is null or false.
+  let published = false;
+  let report;
   let version = 'unknown';
   try {
     // launchServer exposes the browser process, so cleanup can be verified by pid.
@@ -151,6 +167,7 @@ async function runEngine(name, baseUrl) {
     try {
       await page.waitForFunction(() => window.avocetDomFixture !== undefined, null, { timeout: deadlines.fixture });
       report = await page.evaluate(() => JSON.parse(JSON.stringify(window.avocetDomFixture)));
+      published = true;
     } catch (error) {
       problems.push(error?.name === 'TimeoutError'
         ? `fixture did not publish results within ${deadlines.fixture} ms`
@@ -163,8 +180,8 @@ async function runEngine(name, baseUrl) {
   } finally {
     await closeBrowser();
   }
-  if (report) problems.push(...judge(report));
-  return { name, version, report, problems };
+  if (published) problems.push(...judge(report));
+  return { name, version, report: published && wellFormed(report) ? report : null, problems };
 }
 
 function print(outcome) {
