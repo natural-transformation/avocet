@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.0.1 (2026-11-11)
+
+Patch release. `CssValue` rejects comments it accepted in 2.0.0, and
+`avocet.dom` no longer dispatches events from, or drops index entries for,
+nodes it does not currently render. The source and binary API is unchanged;
+saved render buffers, the bootstrap and the wire protocol are unaffected.
 
 ### Changed
 

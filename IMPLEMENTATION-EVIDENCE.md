@@ -498,3 +498,14 @@ This resolves the stale-`vid` item listed as remaining above.
   malformed fixture report.
 - After: `scripts/test-dom-fixture.sh` PASS: fixture 50 of 50 in both engines,
   and self-test 16 of 16 with `null-report` and `malformed-report` added.
+
+## First Linux CI run (2026-11-11)
+
+This closes the "Not yet run: the Linux CI job" item above.
+
+- PR #2 `pr` workflow on `ubuntu-latest`. Run 43101350781 on head `a2c848b`:
+  every step succeeded, including `sbt +test` and "Run the DOM fixture in
+  Chromium and WebKit". Chromium 141.0.7390.37 PASS (50 checks), WebKit 26.0
+  PASS (50 checks), runner self-test PASS. The earlier run 43091160109 on
+  `76bcf2e` also passed.
+- Merged to `main` as `7b0d249`.
