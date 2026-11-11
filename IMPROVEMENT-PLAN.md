@@ -1,160 +1,193 @@
 # Avocet improvement plan
 
-Status: proposed roadmap, revision 2. Date: 2026-11-05.
+Status: release baseline and follow-up roadmap, revision 4. Updated: 2026-11-11.
 
 Priorities: **security, type safety, memory efficiency, flexible functional interfaces**.
 
-This roadmap defines delivery order and architectural decisions. The detailed
-[contracts and acceptance reference](IMPROVEMENT-CONTRACTS.md) defines the required
-behavior. The [review](IMPROVEMENT-PLAN-REVIEW.md) supplies probe programs and
-reported results against Avocet `baeeea2fcabde15c07b89f29c9fb9393cb9703fd` and
-Spoonbill `ac74b78d3daa943a0c755c560dddb160370c5fea`.
+## 1. Released baseline
 
-## 1. Direction
+[Avocet 2.0.0](https://github.com/natural-transformation/avocet/releases/tag/v2.0.0)
+shipped M1 and M2 on 2026-11-06 at commit
+`c130282f48c600ae3e6afc8e89babb59ef1943ca`. The library implementation is the
+reviewed `921de4d`; the release commit changes versioning and release documentation.
+Use the [changelog](CHANGELOG.md), [implementation evidence](IMPLEMENTATION-EVIDENCE.md)
+and [benchmark baseline](bench/BASELINE.md) for delivered behavior and recorded checks.
 
-Repair supported rendering first, then establish a clean foundation for future
-APIs and backends. Security fixes must not wait for a new identity model, a broad
-benchmark programme or optional widget features. Long-term design work remains
-an explicit deliverable, not an indefinitely deferred collection of bug fixes.
+[Spoonbill 10.0.0](https://github.com/natural-transformation/spoonbill/releases/tag/v10.0.0)
+completed published adoption on 2026-11-10 from commit
+`f0d456344359eb63ea4b138d28352860eef49f3b`. Its
+[release build](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/build.sbt#L5)
+selects **Avocet 2.0.0** for core/events. All 26 Spoonbill modules were verified
+on Maven Central; the isolated public recovery-kit consumer passed 27 tests,
+with two inapplicable law branches canceled. These consumer laws establish
+recovery-kit packaging/protocol evidence, not the targeted renderer coverage in F2.
+The release page and its attached verification report record this evidence.
+**F1 is complete.** Spoonbill 9.0.0's selection of Avocet 1.0.0 is historical.
 
-Keep templates as composable descriptions interpreted into HTML or compact diff
-buffers. Separate the authoring API, rendering lifecycle, diff semantics and host
-adapters. Avoid a mandatory object-tree allocation per render or a mandatory
-effect library. Make breaking changes when they remove persistent ambiguity and
-have a tested migration; do not preserve unsafe behavior for compatibility.
+The [contracts](IMPROVEMENT-CONTRACTS.md) describe the supported 2.0 baseline,
+continuing requirements and explicitly deferred features. The
+[implementation guide](IMPLEMENTATION-GUIDE.md) is now a maintenance and next-change
+guide. The [original review](IMPROVEMENT-PLAN-REVIEW.md) remains historical evidence
+against Avocet 1.0.0-era sources; it is not a current defect list.
 
-## 2. Decisions that are settled
+## 2. Architectural decisions retained
 
-- **Exact output is mandatory.** Hashes accelerate comparisons; matching hashes
-  never prove equality. Cache entries distinguish operation kind, namespace,
-  name and attribute/style role. There is no optional residual wrong-output mode.
-- **Security is context-specific.** Encode text and attribute boundaries, validate
-  dynamic names, and make executable/URL/CSS policies explicit. A typed string,
-  validator or external-widget boundary is not a universal sanitizer or sandbox.
-- **One rendering algebra, several interpreters.** Keep an effect-free core and
-  bounded mutable internals behind composable descriptions. Optimized and ordinary
-  evaluation must preserve the same documented semantics.
-- **Lifecycle and resource ownership are explicit.** The supported API must make
-  begin/render/finalize/publish/dispose ordering reliable. Failed preparation must
-  not publish new handlers; partial DOM failure invalidates the baseline rather
-  than pretending to roll back browser operations.
-- **Identity concepts remain distinct.** Logical sibling keys, runtime node
-  identity, tree position and authorization are separate. Do not expose today's
-  byte-buffer layout or positional-ID implementation as a permanent new contract.
-- **Retain the public Scala.js DOM adapter and repair it.** Spoonbill does not use
-  it, but that does not establish that it has no consumers. Treat its current
-  support gaps honestly; future removal would need a separate compatibility decision.
-- **Bound retained resources and define borrowed lifetimes.** Limits, exact cache
-  keys, disposal and synchronous consumption of borrowed buffers are mandatory.
-  Provide an explicit copying path where asynchronous consumers need owned data.
+- **Exact output is mandatory.** Hashes accelerate rejection of unequal values;
+  matching hashes do not prove equality. The problematic header cache was removed.
+- **Security is context-specific.** Encoding, name syntax, URL/CSS policies and
+  application authority are distinct. Typed values and validators are not universal
+  sanitizers; trusted escape hatches remain explicit.
+- **One rendering algebra, several interpreters.** Keep composable descriptions,
+  an effect-independent core and compact buffer-based diffing. Avoid requiring an
+  allocated object tree on every render.
+- **Lifecycle and ownership are explicit.** `RenderRoot`, owned changes and DOM
+  disposal provide the new foundation. Failed preparation retains the published
+  baseline; partial DOM application cannot promise rollback.
+- **Type safety and memory efficiency remain ongoing design requirements.** Use
+  precise types and bounded ownership, measure allocation and retention separately,
+  and preserve ordinary/optimized evaluation semantics when extending the DSL.
+- **Identity remains positional in 2.0.0.** Logical keys, stable handles and tree
+  position must be separated if M3 proceeds; no keyed/move API shipped.
+- **Support both adapters deliberately.** Avocet's Scala.js DOM backend and
+  Spoonbill's remote backend need their own tests. Passing one does not validate
+  the other.
 
-Forms, authorization, scheduling, databases and HTTP remain outside Avocet.
-Spoonbill owns view revisions, authority checks, recovery and wire admission;
-Avocet owns renderer semantics, buffer validity and the shared identity contract.
+Forms, authentication, timers, persistence and HTTP remain outside Avocet.
+Spoonbill owns view authority, admission, recovery and transport policy. A future
+breaking release is acceptable when it produces a cleaner design and includes
+an explicit migration; compatibility must not preserve unsafe behavior.
 
-## 3. Immediate defects and evidence
+Spoonbill 10.0.0 includes [portable UI recovery](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/portable-ui-recovery-plan.md)
+through generic payload/provider interfaces. Inline PostgreSQL snapshots remain
+the default; no Cassandra, Redis or other named payload adapter is required.
+Keep database and recovery coordination outside Avocet. Production rollout and
+datastore qualification remain application work, not prerequisites for F2–F4.
 
-Priorities below reflect rendering impact. Probe IDs refer to the review, not
-issue severity. Its JVM probes were not independently rerun for this revision.
-Promote their cases to deterministic regression tests before applying fixes.
+## 3. Completed repairs and delivered APIs
 
-| Priority / ID | Defect | Evidence and required repair |
+The original D1–D6 identifiers are retained for links from the changelog. These
+are repaired baseline defects, not work to implement again.
+
+| ID | Delivered in 2.0.0 | Regression/evidence entry points |
 | --- | --- | --- |
-| P1 / D1 | Style data can break out of the SSR `style` attribute. | Review P3 and serializer source. Encode the enclosing attribute correctly; validate names and specify CSS policy separately. Verify both XHTML and inherited HTML5 paths. |
-| P1 / D2 | Cached headers confuse attributes/styles and colliding names. | P10a/P10b and P4. Use exact complete cache keys, verify hits and eliminate cursor-dependent reuse. Warm-up/request order must not affect output. |
-| P1 / D3 | Fixed headers fail for ordinary long names. | P1/P2 reproduce 10-character tags and long attribute/style names. Size headers correctly and check the encoded-name length representation; larger allocation alone does not repair a one-byte length overflow. |
-| P1 / D4 | Hash-only equality suppresses real changes. | P4/P5 reproduce wrong tags and omitted text updates; attribute/subtree paths also require coverage. Verify exact semantic equality and keep collision cases in the suite. |
-| P2 / D5 | Positional IDs wrap; bounds fail inconsistently. | P6/P7 and size arithmetic. Reject sibling exhaustion before wraparound, define depth/length errors and check buffer growth and restore inputs. |
-| P1 / D6 | The DOM adapter has lifecycle and multi-handler defects. | Missing finalization and `toMap` handler collapse are visible in source; P8 reproduces the lifecycle sequence in JVM core, not the actual browser adapter. Repair and validate first/repeated render, handlers, replacement cleanup and disposal in Scala.js/browser tests. |
+| D1 | SSR style values are encoded for the surrounding attribute; dynamic names are checked. | `XhtmlRenderContextTest`, browser SSR/update cases. |
+| D2 | Thread-local header-cache confusion is eliminated by removing that cache. | `DiffRenderContextRegressionTest`, same-name attribute/style and collision cases. |
+| D3 | Headers support the declared 1024-character name limit using checked 16-bit name lengths. | Long-tag, attribute/style-name and boundary regressions. |
+| D4 | Tag, text, attribute and subtree equality checks verify bytes after hash matches. | Fixed collision fixtures and ordered replay properties. |
+| D5 | IDs, depth, lengths and buffer growth are checked; saved format 2 is validated. Capacity 1 is rejected. | ID/buffer regressions, `ReviewFixesTest`, malformed-restore tests. |
+| D6 | The DOM adapter renders repeatedly, preserves handlers, cleans descendant indexes, disposes roots and handles the reviewed reentrancy cases. | `EventTableTest`, the 23-check `domFixture`. |
 
-Also repair the property that catches exceptions and returns success. Expand
-generators beyond short fixed names to long names, collision pairs and same-name
-attribute/style cases. Ordered patch replay must supplement sorted-list assertions.
+M2 delivered `RenderRoot`/`RenderOutcome`, `OwnedChange`/`OwnedChangesPerformer`,
+`Validation`/`ValidatingRenderContext`, typed attribute/style keys, URL/CSS policy
+values, explicit trusted helpers, composition helpers and `TrimPolicy`.
+Migration, optimizer, allocation and retained-memory tests accompany them.
 
-Do not overstate the evidence: P11 demonstrates serialized `<br></br>`, not a
-browser parse. `renderHtml` currently uses `XhtmlRenderContext`; Spoonbill uses
-`Html5RenderContext` with pretty-printing disabled. Confirm parser consequences
-and distinguish these paths in tests and documentation.
+Important limits remain: validation is optional and table-driven, not a complete
+HTML parser; interactive validation diagnoses problematic text segmentation rather
+than normalizing it; generic `renderHtml` still uses XHTML serialization; and
+DOM callbacks retain their legacy `Any`/Boolean result convention. Do not interpret
+“M2 shipped” as “every broader acceptance goal has been proved for every input.”
 
 ## 4. Delivery milestones
 
-| Milestone | Work in order | Completion gate |
+| Milestone | Current status | Next action |
 | --- | --- | --- |
-| **M1: repaired baseline** | Make tests trustworthy; convert D1–D6 into regression cases; fix escaping, header/cache behavior, exact equality and checked limits; repair the supported DOM path. | Relevant JVM/JS tests pass; optimizer/plain examples agree; targeted browser cases exercise repaired behavior; a real Spoonbill service uses the verified candidate artifacts. Release notes identify behavior changes and remaining limitations. |
-| **M2: durable architecture and API** | Establish the explicit render/dispose lifecycle, composable validation, context-specific typed helpers, bounded caches/buffer retention and owned/borrowed performer APIs. Define optimizer evaluation laws and supported HTML/bootstrap semantics. | Representative old/custom/new consumers compile and behave correctly; invalid uses fail clearly; browser conformance, failure containment and retention checks pass; allocation and performance costs are recorded. |
-| **M3: keyed identity and moves — conditional** | First name a real application screen and its failing reorder behavior. Then compare stable handles with positional remapping, select an identity contract and implement coordinated adapters only if justified. | The screen preserves required DOM state and event targets; memory is bounded; Spoonbill bootstrap, stale events, nested components and mixed-version handling are proven. Otherwise defer this milestone explicitly. |
-| **M4: external subtree ownership — conditional** | Name an editor/chart integration, define container/descendant ownership and lifecycle, then implement it against the selected identity contract. | Ordinary rendering leaves external descendants alone; move/replacement/disposal/recovery behavior and retention are verified. Otherwise defer. |
+| M1: repaired baseline | Shipped in Avocet 2.0.0; adopted by Spoonbill 10.0.0 | Maintain the repairs and strengthen targeted service/browser coverage in F2. |
+| M2: durable architecture and API | Shipped in Avocet 2.0.0 | Maintain the foundation; close documented coverage gaps and evaluate explicit follow-ups without rebuilding the API from scratch. |
+| M3: keyed identity and moves | Deferred; demand gate not met | Name a real application screen and a reproducible reorder/state-preservation requirement before choosing identity or protocol changes. |
+| M4: external subtree ownership | Deferred; demand gate not met | Name a real widget and its mount/update/dispose/recovery needs before adding the ownership API. |
 
-M1 can ship as focused repairs; it need not wait for all M2 work. **M2 is required
-long-term work**, not conditional on a demand for keyed lists. Migration, accurate
-documentation and release validation apply to every milestone, including M1.
+Security, type safety, lifecycle clarity, memory bounds and migration quality
+remain required for every subsequent change. They are not conditional on demand
+for M3/M4. Stable handles are still an experiment to evaluate when M3 begins,
+not an announced feature of 2.0.0.
 
-Within M1, write the relevant failing regression before each fix rather than
-waiting for a universal test framework. Reuse Spoonbill's Nix browser environment;
-do not block urgent repairs on a second browser toolchain. Targeted browser
-validation remains required for HTML/DOM changes. Broad benchmarks start before
-performance-sensitive M2/M3 decisions and must not delay necessary security fixes.
+## 5. Follow-up status and next implementation batch
 
-## 5. Designing M2 for long-term use
+| Follow-up | Status and remaining scope | Completion evidence |
+| --- | --- | --- |
+| F1: released Spoonbill adoption | Complete in 10.0.0. Preserve its renderer, timer/component, saved-buffer and migration regressions. | Published core/events 2.0.0 selected by Spoonbill; consumer release and public-artifact verification recorded above. |
+| F2: repair-specific service fixtures | Open. Spoonbill has SSR/preset-ID unit tests, failed-render recovery tests and invalid-buffer service tests. Add explicit long-name, known-collision, style-encoding and SSR-first-live-patch cases through its real service/client. | Browser assertions inspect parsed SSR and subsequent live patches in Chromium/WebKit using the selected renderer artifacts. Existing synthetic transport or unit checks alone do not close this gap. |
+| F3: repeatable browser automation | Implemented 2026-11-11: a `.#browser` shell, `scripts/test-dom-fixture.sh`, a fault-injection/interruption self-test and a PR workflow step. The fixture passes in Chromium 141 and WebKit 26 on aarch64-darwin. The PR workflow previously targeted only the missing `master` branch and now also targets `main`; its first Linux run is pending. | Nix-managed Chromium/WebKit run the linked Scala.js DOM adapter, fail on missing/partial results or page errors, and clean up owned servers/browsers under finite timeouts. |
+| F4: conformance and documentation follow-through | Implemented 2026-11-11: comment rejection in `CssValue` with JVM/JS and browser regressions, a 21-case supported/diagnosed/outside HTML matrix and 100-cycle churn checks in both engines. A probe found stale node identity in the DOM adapter (contracts §1.4); it is fixed with three regressions, for 50 fixture checks. No browser heap evidence was recorded. | Targeted regressions and documentation agree; resource/index/handler bounds are demonstrated without inferring heap or allocation claims from counts alone. |
+| F5: future API decisions | Conditional. Evaluate text normalization/bootstrap handling and explicit DOM event outcomes with representative consumers. Neither is already shipped. | A design decision and migration evidence; this is separate from the F2–F4 hardening batch. |
 
-Establish stable semantic boundaries rather than accumulating convenience wrappers:
+Use [IMPLEMENTATION-GUIDE.md](IMPLEMENTATION-GUIDE.md) as the entry point. F3 and
+F4 were delivered on 2026-11-11 in that order; F2 on Spoonbill's backend is next.
+The original batch plan follows: execute
+F3 first to make the existing DOM checks repeatable; then deliver focused F4 and
+F2 changes using their respective backends. A small JVM/JS policy regression may
+be developed independently while F3 is being built. The batch should:
 
-1. **Authoring:** typed nodes/attributes/styles, validated dynamic extension points,
-   explicit composition and misc/event adaptation. Keep ordinary Scala composition
-   usable and improve inference without hiding trust decisions.
-2. **Lifecycle:** a high-level scoped render operation owns preparation, completion
-   and cleanup. Retain low-level integration APIs with explicit thread confinement,
-   borrowing and failure rules; avoid two competing publication states.
-3. **Backends:** document operation semantics independently of byte layout and
-   transport. Version future capabilities rather than adding no-op performer methods.
-   Do not add move scaffolding before M3 merely to anticipate it.
-4. **Optimizer:** run every representative API example through optimized and plain
-   interpretation. Assert operation/evaluation-order equivalence; measure allocation
-   and fallback behavior. New helpers must lower efficiently or document their cost.
-5. **Compatibility:** keep unsafe behavior out of the contract, provide migration
-   adapters where they have a clear lifetime, and prefer a justified major release
-   over permanent parallel models of identity or lifecycle.
+1. Reuse the existing fixture/result protocol and Spoonbill's Nix/browser patterns,
+   without claiming an Avocet browser command exists before implementing it.
+2. Fix the narrow CSS comment discrepancy. The source currently admits `/` and
+   `*` inside functions despite the comment-rejection claim. Recommend rejecting
+   actual comment tokens outside quoted literals while retaining arithmetic such
+   as `calc(100% / 2)` and `calc(2 * 1px)`. Add regressions before changing behavior;
+   no exploitable bypass has been demonstrated by this documentation review.
+3. Exercise the real Spoonbill HTML5/bootstrap/first-patch path, including valid
+   long names and fixed hash-collision inputs. Preserve existing acceptance,
+   event, component and timer behavior; do not implement the repaired engine again.
+4. Add repeated mount/update/dispose checks using the DOM fixture's existing
+   handler/index diagnostics. Report heap measurements separately when supported.
 
-Choose concrete defaults and signatures through compile-tested examples and
-record decisions as each milestone starts. Open choices are implementation
-strategy and measured limits—not whether to provide correct output or bounded
-ownership. Preserve the detailed [functional API](IMPROVEMENT-CONTRACTS.md#3-type-safe-functional-authoring),
-[memory](IMPROVEMENT-CONTRACTS.md#5-memory-and-lifecycle-engineering) and
-[compatibility](IMPROVEMENT-CONTRACTS.md#10-compatibility-and-migration) contracts.
+F2–F4 completion requires the commands, engines, test discovery and failure-path
+evidence specified in the guide and contracts. It does not require keys, widgets,
+text normalization, new database adapters or an application deployment.
 
-## 6. Candidate integration and release
+Patch-byte measurements and additional workload coverage remain useful when
+integration or performance work requires them. Spoonbill's
+[latency report](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/event-latency-performance.md#remaining-limits)
+leaves realistic write mixes, hot accounts, real browser rendering and external
+store deployments to be measured. Choose a representative repeated workload
+before altering realm locking or transaction structure; do not restart the full
+historical benchmark programme merely to close F2–F4. Use the frozen M2 renderer
+measurements as scoped historical evidence and refresh them when conditions change.
 
-Spoonbill consumes published `avocet-core` and `avocet-events` artifacts, currently
-1.0.0, rather than this source checkout. Test a unique local snapshot published
-through Nix, select that exact version in an isolated Spoonbill checkout, and
-verify the resolved JARs before interpreting results. Do not overwrite a released
-version locally. See the [candidate procedure](IMPROVEMENT-CONTRACTS.md#92-spoonbill-candidate-integration).
+## 6. Evidence and migration
 
-Existing Node and native-browser fixtures include synthetic transport; passing
-them alone does not exercise the candidate Scala renderer. Add repair-specific
-SSR/first-update cases and run them through a real service using the candidate.
-Test `avocet-dom` separately because Spoonbill does not execute that adapter.
+The historical Avocet implementation evidence records the second-review checks:
+166 uTest JVM cases plus three ScalaCheck properties, 158 uTest Scala.js cases
+plus three properties, four DOM unit tests and a 23-check Chromium fixture.
+It also records candidate validation in an isolated Spoonbill checkout, including
+real-service Chromium/WebKit checks. Those were pre-release candidate runs, not
+a validation of the two published artifacts as a pair. Subsequent delivery is
+recorded by Spoonbill 10.0.0's release and
+[verification checklist](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/remaining-work-after-portable-recovery.md):
+1,541 Scala tests, targeted invalid-buffer recovery, and real-service browser
+handoffs were recorded during integration/release preparation. Public publication
+and the isolated released-kit consumer were verified on 2026-11-10. The source
+checklist was committed before publishing; use the release page for those final
+external gates. Do not relabel historical benchmarks as newly rerun measurements.
 
-Every delivered repair has core regressions, relevant integration evidence,
-release notes and a tracked Spoonbill dependency update. Publishing and merging
-the update are explicit release steps, not effects of writing this plan. Qualify
-README memory/allocation claims with measured workload and lifecycle limits.
+The 2.0 release rejects unversioned 1.0 saved render buffers. Spoonbill 10.0.0
+quarantines invalid legacy development buffers to `.invalid` siblings, reports
+the affected path and returns a terminal full-page reload. The marker and failed
+session prevent an old connection from adopting a fresh baseline after reconnect
+or restart; guarded sessions bypass these buffers. Follow its
+[migration guide](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/migration-v10.md), preserving application,
+domain and authentication data. Legacy three-argument
+`DiffRenderContext` factory/constructor signatures remain, but stricter lifecycle
+and name checks and DOM exception behavior still require migration attention.
+The positional bootstrap and wire protocol did not acquire move operations.
 
-## 7. Acceptance and decisions
+Use the [current validation commands](IMPROVEMENT-CONTRACTS.md#9-validation-commands-and-environment)
+and [Spoonbill candidate procedure](IMPROVEMENT-CONTRACTS.md#92-spoonbill-candidate-integration).
+For future Avocet changes, publish a unique local snapshot, never overwrite a
+released artifact, and verify the consumer's resolved JARs before interpreting
+results. Updating these documents does not modify or release either library.
 
-Use the [acceptance matrix](IMPROVEMENT-CONTRACTS.md#8-acceptance-matrix) and
-[Nix commands](IMPROVEMENT-CONTRACTS.md#9-validation-commands-and-environment).
-Record commands, outcomes, seeds and candidate versions; distinguish source
-evidence, JVM probes, browser behavior and performance measurements.
+## 7. Acceptance for future changes
 
-Before M1 closes, settle the name/encoding policy, name-length representation,
-exact equality/cache implementation and DOM support tests. Before M2 exposes a
-new API, settle lifecycle failure behavior, numeric limits, safe/trusted helper
-boundaries and text/bootstrap normalization. Before M3 begins, name the application
-case and required identity behavior; choose the algorithm only after the identity
-and memory experiment. Before M4 begins, name the widget and its lifecycle needs.
+Retain the [acceptance matrix](IMPROVEMENT-CONTRACTS.md#8-acceptance-matrix),
+[memory requirements](IMPROVEMENT-CONTRACTS.md#5-memory-and-lifecycle-engineering)
+and [compatibility rules](IMPROVEMENT-CONTRACTS.md#10-compatibility-and-migration).
+Record commands, outcomes, seeds and exact candidate versions. Keep source
+inspection, JVM probes, browser behavior and measurements distinct.
 
 Stop a feature that misroutes events, weakens Spoonbill admission, retains
 unbounded state or adds unjustified architectural complexity. Measure the cost
-of correctness instead of weakening it to meet a speed target. Security repairs,
-validation and migration work continue even if M3/M4 are deferred.
+of correctness instead of weakening it to meet a speed target. Prefer focused
+improvements to the shipped foundation; keep larger redesigns tied to evidence
+and a clean long-term model.

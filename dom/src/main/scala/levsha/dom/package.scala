@@ -46,6 +46,11 @@ import scala.scalajs.js
   * from the target id (see [[EventTable]]). `submit` events are prevented by
   * default, as before.
   *
+  * An event resolves to a handler only when its target is a node this root
+  * currently renders. A removed node that other code puts back, a node moved
+  * in from another root and foreign content (for example children inserted by
+  * a widget) dispatch no handler, not even an ancestor's.
+  *
   * The template root (id 1) is the target element itself: its attributes and
   * styles are applied to `target`, its children become `target`'s children, and
   * its tag name is not checked. A root "replacement" empties the target; it
@@ -81,11 +86,9 @@ package object dom {
       }
     }
 
+    // Only a node this root currently renders has an id here; see DomChangesPerformer.liveIdOf.
     private def targetIdOf(nativeEvent: browser.Event): Option[Id] =
-      nativeEvent.target.asInstanceOf[js.Dynamic].vid.asInstanceOf[Any] match {
-        case vid: String => Some(Id(vid))
-        case _ => None
-      }
+      performer.liveIdOf(nativeEvent.target.asInstanceOf[browser.Node])
 
     def render(node: Document.Node[Misc]): Unit =
       // Invalid, disposed and reentrant renders are refused by the root with INVALID_STATE.

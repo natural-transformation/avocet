@@ -404,3 +404,97 @@ paragraph closed by `div` is no longer reported a second time for a later
 Verification of this revision: `sbt +test` coreJVM 166 passed, coreJS 158
 passed, dom 4; fixture 23 of 23 in Chromium 152; `bench/compile` passes;
 candidate `1.0.0-r2-baeeea2-SNAPSHOT` in the Spoonbill worktree after `sbt clean`: `spoonbill/test` 614, `testkit/test` 19, real-service check PASS in Chromium and WebKit.
+
+# F3/F4 evidence (2026-11-11)
+
+```text
+Follow-up/defect/contract IDs: F3; F4 (contracts §1.1, §2.2, §5, F3/F4 gates)
+Producer and consumer commits/releases/candidate version: Avocet working tree on
+  c130282 (2.0.0); no consumer or candidate publication involved
+Changed behavior and compatibility impact: CssValue rejects comments inside
+  allowed functions (source/binary compatible; values that relied on such
+  comments are now rejected). Test tooling, flake shell and PR workflow only
+  otherwise.
+Browser path: Scala.js adapter and browser parse of Html5RenderContext SSR,
+  in Playwright 1.56.1 Chromium 141.0.7390.37 and WebKit 26.0 (aarch64-darwin)
+```
+
+## F3: automated fixture runs
+
+- Added: `.#browser` shell in `flake.nix` (Playwright driver and browsers from
+  the locked nixpkgs input, the revision Spoonbill 10.0.0 pins);
+  `scripts/test-dom-fixture.sh`; `misc/dom-fixture/run-browsers.mjs`,
+  `runner-self-test.mjs` and the shared `server.mjs` (now also used by
+  `serve.mjs`; it rejects sibling paths that share the root's prefix). PR
+  workflow step after `sbt +test`.
+- `nix develop .#browser --no-write-lock-file --command bash scripts/test-dom-fixture.sh`:
+  PASS. Fixture 47 of 47 in both engines; self-test 12 of 12: no fault (exit 0),
+  `failing-check`, `partial-results`, `missing-results` and `page-error`
+  (exit 1, expected message) in both engines, SIGINT in Chromium (130) and
+  SIGTERM in WebKit (143). After every run the browser's process group and the
+  server port were gone; the interrupt cases first observed both alive.
+- Setup failures exit 2: outside the browser shell, an unknown engine and an
+  unknown fault name each print their cause.
+- Not yet run: the Linux CI job. The PR workflow previously targeted only
+  `master`, so no PR or push CI had ever run (only release runs exist). The
+  Linux shell attributes, including the Mesa EGL vendor, evaluate.
+
+## F4: CSS comments, HTML profile and churn
+
+- Regression before the fix: `coreJVM/testOnly avocet.TypedDslTest` failed
+  1 of 9 on `calc(1px/*note*/ + 2px)` (accepted).
+- After: `coreJVM/testOnly` and `coreJS/testOnly` of `avocet.TypedDslTest
+  avocet.XhtmlRenderContextTest` pass 19 of 19 each.
+- Fixture additions (`ProfileChecks.scala`, 24 checks): 7 supported shapes agree
+  with the parsed SSR on first render, update and update back; 12 diagnosed
+  shapes are rejected with their code and parse differently; 2 outside cases
+  (XHTML `<br></br>` parses as two `br`; pretty-printed SSR adds whitespace
+  text); CSS arithmetic applies identically through setters and SSR while comment
+  values are rejected; 100 churn cycles keep handler/index counts at their
+  declared values and 100 retired nodes dispatch nothing.
+- Failure probes (temporary edits, restored): with the scanner fix reverted, the
+  fixture CSS check fails in both engines. A removed button put back under the
+  live root dispatched 2 clicks, the current button's and the root's, through
+  its stale `vid` `1_1`. This is a new finding against §1.4; the adapter is
+  unchanged.
+- Broader gate: `sbt +test domFixture/fastLinkJS bench/compile` PASS: coreJVM 167
+  uTest plus 3 properties, coreJS 159 plus 3, dom 4; the fixture links and
+  `bench/compile` passes.
+- Remaining: the stale-`vid` dispatch and the dropped events of elements without
+  a `vid` need an adapter decision; no browser heap measurement; the F2
+  real-service cases in Spoonbill.
+
+## Stale node identity fix (2026-11-11, contracts §1.4)
+
+This resolves the stale-`vid` item listed as remaining above.
+
+- Cause: `avocet.dom` took an event target's positional id from the `vid`
+  property it stores on created nodes, and `DomChangesPerformer.forget` removed
+  index entries by that property. Removed nodes keep it, and nodes of another
+  root carry the same ids.
+- Regression before the fix (`IdentityChecks.scala`, 3 checks): all three failed
+  in Chromium 141 and WebKit 26. A removed button put back under the root ran 2
+  handlers (the live button's and the root's). A button moved in from another
+  root ran 2 of the receiving root's handlers. Removing a section that held a
+  removed button dropped the live button's and its text's index entries
+  (index 2, want 4), the next update failed and the root stopped dispatching.
+- Fix: `DomChangesPerformer.liveIdOf` accepts an id only when the index maps it
+  back to that very node; it is used for event targets and in `forget`.
+  Behavior for foreign content is unchanged: no handler runs.
+- After: `scripts/test-dom-fixture.sh` PASS, fixture 50 of 50 in both engines
+  and runner self-test 12 of 12; `sbt +test domFixture/fastLinkJS bench/compile`
+  PASS (coreJVM 167 uTest plus 3 properties, coreJS 159 plus 3, dom 4).
+
+## Runner review fix (2026-11-11)
+
+- Finding (PR #2 review, P2): a page that published `null` passed with 0
+  checks. The completion wait accepted any value other than `undefined`, and
+  validation ran only for a truthy report. Reproduced in Chromium and WebKit
+  (`PASS (0 checks)`, exit 0). A `null` result entry instead crashed the
+  validation with a generic "runner failed" message.
+- Regression before the fix: the new self-test case `null-report` failed (exit 0).
+- Fix: every published value is validated; anything other than an object with a
+  numeric `failed` and `{name: string, ok: boolean}` results is reported as a
+  malformed fixture report.
+- After: `scripts/test-dom-fixture.sh` PASS: fixture 50 of 50 in both engines,
+  and self-test 16 of 16 with `null-report` and `malformed-report` added.
