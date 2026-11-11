@@ -1,6 +1,6 @@
 # Avocet implementation and maintenance guide
 
-Updated: 2026-11-11. Baseline: **Avocet 2.0.0**, source `c130282`.
+Updated: 2026-11-11. Baseline: **Avocet 2.0.1**, source `255966b` (2.0.0 was `c130282`).
 
 The [plan](IMPROVEMENT-PLAN.md) records shipped milestones and remaining F2–F5
 work. The [contracts](IMPROVEMENT-CONTRACTS.md) define supported behavior and
@@ -24,7 +24,7 @@ The release verification does not close that coverage gap.
 
 1. Read `AGENTS.md`, the plan and the relevant contract section. Record source
    commits and working-tree state; preserve unrelated tracked and untracked files.
-2. For maintenance, start from 2.0.0 and its regressions. For F2, use an
+2. For maintenance, start from 2.0.1 and its regressions. For F2, use an
    isolated Spoonbill 10.0.0 or current checkout and record its exact commit.
    M3/M4 need the named application/widget evidence
    in the plan before implementation begins.
@@ -355,12 +355,12 @@ assertions. Do not alter released artifacts or tags.
 
 ## 7. Test future Avocet candidates
 
-For changes beyond 2.0.0, choose a unique snapshot for the exact producer commit
+For changes beyond 2.0.1, choose a unique snapshot for the exact producer commit
 and iteration, and publish only to the local resolver:
 
 ```bash
 # Avocet checkout; replace the example with a unique candidate version.
-env RELEASE_VERSION='2.0.1-PRODUCER_SHA-f4-ITERATION-SNAPSHOT' \
+env RELEASE_VERSION='2.0.2-PRODUCER_SHA-ITERATION-SNAPSHOT' \
   nix develop . --no-write-lock-file --command \
   sbt 'show coreJVM/version' 'show eventsJVM/version' \
   'coreJVM/publishLocal' 'eventsJVM/publishLocal'

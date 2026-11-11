@@ -509,3 +509,16 @@ This closes the "Not yet run: the Linux CI job" item above.
   PASS (50 checks), runner self-test PASS. The earlier run 43091160109 on
   `76bcf2e` also passed.
 - Merged to `main` as `7b0d249`.
+
+## 2.0.1 release (2026-11-11)
+
+- Release `v2.0.1` on `255966b` (merge of PR #3), published from GitHub.
+  `release.yml` run 43108094058 succeeded: GPG import, `+publishSigned` and
+  `sonatypeCentralRelease`.
+- Maven Central serves the POM and JAR for 2.0.1 of `avocet-core_3`,
+  `avocet-core_sjs1_3`, `avocet-events_3`, `avocet-events_sjs1_3` and
+  `avocet-dom_sjs1_3`, the same artifact set as 2.0.0. The published
+  `avocet-dom_sjs1_3-2.0.1.jar` contains `DomChangesPerformer.liveIdOf`; the
+  2.0.0 jar does not.
+- Not checked: a consumer build against the published 2.0.1 artifacts.
+  Spoonbill 10.0.0 still selects 2.0.0.
