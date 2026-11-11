@@ -1,13 +1,15 @@
 # Avocet contracts and acceptance reference
 
-Status: Avocet 2.0.0 baseline and continuing requirements. Updated: 2026-11-11.
+Status: Avocet 2.0.1 baseline and continuing requirements. Updated: 2026-11-11.
 
 The [roadmap](IMPROVEMENT-PLAN.md) records M1/M2 as shipped in
 [Avocet 2.0.0](https://github.com/natural-transformation/avocet/releases/tag/v2.0.0).
 This reference distinguishes implemented contracts from future acceptance work.
 M3 keyed identity and M4 external subtree ownership remain conditional and unimplemented.
 
-Avocet remains at the 2.0.0 source baseline (`c130282`).
+[Avocet 2.0.1](https://github.com/natural-transformation/avocet/releases/tag/v2.0.1)
+(`255966b`, 2026-11-11) is the current baseline. It patches 2.0.0 (`c130282`)
+with the F4 `CssValue` comment and DOM node-identity fixes.
 [Spoonbill 10.0.0](https://github.com/natural-transformation/spoonbill/releases/tag/v10.0.0)
 was published on 2026-11-10 at `f0d456344359eb63ea4b138d28352860eef49f3b`; its
 [tagged build](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/build.sbt#L5)
@@ -471,7 +473,7 @@ select that exact version in an isolated consumer, and verify resolution:
 
 ```bash
 # Avocet checkout: replace the example with a unique commit/iteration version.
-env RELEASE_VERSION='2.0.1-PRODUCER_SHA-f4-ITERATION-SNAPSHOT' \
+env RELEASE_VERSION='2.0.2-PRODUCER_SHA-ITERATION-SNAPSHOT' \
   nix develop . --no-write-lock-file --command \
   sbt 'show coreJVM/version' 'show eventsJVM/version' \
   'coreJVM/publishLocal' 'eventsJVM/publishLocal'

@@ -13,6 +13,12 @@ reviewed `921de4d`; the release commit changes versioning and release documentat
 Use the [changelog](CHANGELOG.md), [implementation evidence](IMPLEMENTATION-EVIDENCE.md)
 and [benchmark baseline](bench/BASELINE.md) for delivered behavior and recorded checks.
 
+[Avocet 2.0.1](https://github.com/natural-transformation/avocet/releases/tag/v2.0.1)
+followed on 2026-11-11 at `255966b`. This patch release carries the F4 `CssValue`
+comment fix and the DOM node-identity fix; the API is unchanged. Spoonbill 10.0.0
+still selects 2.0.0. Moving it to 2.0.1 picks up the `CssValue` fix; Spoonbill
+does not use `avocet-dom`.
+
 [Spoonbill 10.0.0](https://github.com/natural-transformation/spoonbill/releases/tag/v10.0.0)
 completed published adoption on 2026-11-10 from commit
 `f0d456344359eb63ea4b138d28352860eef49f3b`. Its
