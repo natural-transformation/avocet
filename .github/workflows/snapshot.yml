@@ -1,9 +1,10 @@
-name: master
+name: snapshot
 
+# Publishes BaseVersion-SNAPSHOT (see build.sbt) of core, events and dom to the
+# Central Portal snapshots repository. Manual only: start it from the Actions
+# tab with "Run workflow" and pick the branch. Releases go through release.yml.
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
 
 jobs:
   build_and_publish:

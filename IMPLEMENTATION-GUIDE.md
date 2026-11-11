@@ -199,9 +199,11 @@ Linux the shell also supplies the pinned Mesa EGL vendor, applied to the owned
 WebKit process only. That workflow used to target only `master`, which does not
 exist, so pull requests to `main` ran no CI at all; it now targets `main` too.
 Its first Linux run, on PR #2, passed: 50 checks in both engines and the
-self-test. `master.yml` still triggers on `master`
-only and publishes snapshots, so changing its trigger is a separate maintainer
-decision.
+self-test. Snapshot publishing is manual: the
+[snapshot workflow](.github/workflows/snapshot.yml), formerly `master.yml` with a
+trigger on the nonexistent `master` branch, runs only from the Actions tab's "Run
+workflow". It tests and then publishes `BaseVersion-SNAPSHOT`; releases go through
+`release.yml`.
 
 For manual inspection, link and serve the page:
 
