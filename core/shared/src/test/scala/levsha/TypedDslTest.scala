@@ -90,6 +90,21 @@ object TypedDslTest extends TestSuite {
       assert(trusted.css("url(x)") == CssValue.trusted("url(x)"))
     }
 
+    "CSS comments are rejected outside quoted strings; arithmetic and quoted text are kept" - {
+      // A CSS tokenizer consumes `/*` up to `*/` (or the end) before any other
+      // token, so inside an allowed function it is a comment, not arithmetic:
+      // `calc(4px/*2)` opens an unterminated comment rather than dividing.
+      Seq(
+        "calc(1px/*note*/ + 2px)", "calc(1px /* note */ + 2px)", "min(1px, max(2px /* x */, 3px))",
+        "rgb(1 2 3 /**/)", "calc(4px/*2)", "calc(1px /* x)", "10px /* top */", "calc(1px + 2px) /*")
+        .foreach(v => assert(CssValue(v).isEmpty))
+      Seq(
+        "calc(100% - 10px)", "calc(100% / 2)", "calc(4px/2)", "calc(2 * 1px)", "calc(2*1px)",
+        "calc((100% - 10px) / 2)", "calc(2 * (1px + 2px))", "1 / 2", "12px/1.5 sans-serif",
+        "\"a /* b */ c\"", "'*/ x /*'")
+        .foreach(v => assert(CssValue(v).isDefined))
+    }
+
     "trusted escape hatches name their sink and are still escaped as attribute data" - {
       val doc = div(trusted.inlineHandler("click", "alert(\"1\")"), TagDef("iframe")(trusted.srcdoc("<p>x</p>")))
       assert(html5(doc) == """<div onclick="alert(&quot;1&quot;)"><iframe srcdoc="&lt;p&gt;x&lt;/p&gt;"></iframe></div>""")

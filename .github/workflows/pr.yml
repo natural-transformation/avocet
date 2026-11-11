@@ -2,7 +2,9 @@ name: pr
 
 on:
   pull_request:
+    # main is the repository's default branch; master was the original target.
     branches:
+      - main
       - master
 
 jobs:
@@ -21,5 +23,10 @@ jobs:
 
       - name: Run tests
         run: nix develop --command sbt +test
+
+      # Links the Scala.js DOM fixture and runs it in Nix-pinned headless
+      # Chromium and WebKit, then checks that the runner fails closed.
+      - name: Run the DOM fixture in Chromium and WebKit
+        run: nix develop .#browser --no-write-lock-file --command bash scripts/test-dom-fixture.sh
 
 

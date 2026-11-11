@@ -50,9 +50,22 @@ final class DomChangesPerformer(target: Element) extends ChangesPerformer {
       case _ => None
     }
 
-  /** Drops the index entries of `node` and all its descendants; the target itself stays indexed. */
+  /**
+    * The id under which `node` is live in this root, if any. The `vid` a node
+    * carries is only a hint: a removed node keeps it, and a node of another
+    * root carries the same positional ids. Only an index entry that maps the
+    * id back to this very node makes it live.
+    */
+  private[dom] def liveIdOf(node: Node): Option[Id] =
+    vidOf(node).map(Id(_)).filter(id => index.get(id).exists(_ eq node))
+
+  /**
+    * Drops the index entries of `node` and all its descendants; the target
+    * itself stays indexed. Descendants that are not live here, such as a
+    * removed node that other code put back, keep the live entries of their ids.
+    */
   private def forget(node: Node): Unit = {
-    if (node ne target) vidOf(node).foreach(vid => index.remove(Id(vid)))
+    if (node ne target) liveIdOf(node).foreach(index.remove)
     var child = node.firstChild
     while (child != null) {
       forget(child)

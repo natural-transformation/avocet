@@ -115,6 +115,10 @@ object CheckedUrl {
   * function that can load a resource or run code (`url`, `image-set`, `src`,
   * `image`, `element`, `attr`, `expression`, vendor variants), strings inside
   * functions, escapes, comments, `;`, `{`, `}`, `<`, `>`, `!` and at-rules.
+  * A comment is a slash immediately followed by an asterisk outside a quoted
+  * string, terminated or not, also inside an allowed function; division and
+  * multiplication otherwise (`calc(100% / 2)`, `calc(2*1px)`) remain accepted,
+  * and a top-level quoted string may contain those characters literally.
   * The interpreter still escapes the value for the enclosing attribute.
   */
 final class CssValue private[dsl] (val value: String) {
@@ -162,6 +166,10 @@ object CssValue {
     var depth = 0
     while (i < n) {
       val c = s.charAt(i)
+      // `/*` opens a CSS comment wherever it appears outside a string (quoted
+      // strings are skipped whole below), so `calc(1px/*x*/ + 2px)` and
+      // `calc(4px/*2)` are comments, not division followed by multiplication.
+      if (c == '/' && i + 1 < n && s.charAt(i + 1) == '*') return false
       if (c == ' ' || c == '\t' || c == ',' || c == '/') i += 1
       else if (depth > 0 && (c == '+' || c == '*')) i += 1 // arithmetic inside an allowed math function
       else if (depth > 0 && c == '(') { depth += 1; i += 1 } // grouping inside an allowed function

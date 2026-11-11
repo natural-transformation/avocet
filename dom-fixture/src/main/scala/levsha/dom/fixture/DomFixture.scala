@@ -17,13 +17,21 @@ import scala.scalajs.js
   * container, drives first/repeated renders, handler dispatch, failure
   * containment, disposal and the SSR parse of the style-encoding probe, and
   * publishes the results on `window.avocetDomFixture` and in the page.
+  * [[ProfileChecks]] adds the HTML profile matrix, the CSS comment policy and
+  * lifecycle churn.
   *
-  * Build and serve (from the repository root):
+  * Automated run in headless Chromium and WebKit (from the repository root):
+  * {{{
+  * nix develop .#browser --no-write-lock-file --command bash scripts/test-dom-fixture.sh
+  * }}}
+  * Manual run:
   * {{{
   * nix develop . --no-write-lock-file --command sbt domFixture/fastLinkJS
   * nix develop . --no-write-lock-file --command node misc/dom-fixture/serve.mjs
   * }}}
   * then open http://127.0.0.1:8765/misc/dom-fixture/index.html in a browser.
+  * Adding or removing a check means updating `EXPECTED_CHECKS` in
+  * misc/dom-fixture/run-browsers.mjs.
   */
 object DomFixture {
 
@@ -31,20 +39,20 @@ object DomFixture {
 
   private val results = mutable.Buffer.empty[Result]
 
-  private def check(name: String)(body: => (Boolean, String)): Unit = {
+  private[fixture] def check(name: String)(body: => (Boolean, String)): Unit = {
     val (ok, detail) =
       try body
       catch { case e: Throwable => (false, s"threw ${e.getClass.getSimpleName}: ${e.getMessage}") }
     results += Result(name, ok, detail)
   }
 
-  private def newContainer(): Element = {
+  private[fixture] def newContainer(): Element = {
     val el = document.createElement("div")
     document.body.appendChild(el)
     el
   }
 
-  private def fire(target: browser.Node, tpe: String, bubbles: Boolean): Unit = {
+  private[fixture] def fire(target: browser.Node, tpe: String, bubbles: Boolean): Unit = {
     val ctor = if (tpe == "click") js.Dynamic.global.MouseEvent else js.Dynamic.global.Event
     val event = js.Dynamic.newInstance(ctor)(tpe, jsObject("bubbles" -> bubbles, "cancelable" -> true))
     target.asInstanceOf[js.Dynamic].dispatchEvent(event)
@@ -68,6 +76,8 @@ object DomFixture {
     reentrancy()
     ssrStyleEncoding()
     lifecycleApi()
+    ProfileChecks.run()
+    IdentityChecks.run()
     publish()
   }
 

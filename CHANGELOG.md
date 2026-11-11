@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **`CssValue` rejects comments inside functions (F4).** A slash immediately
+  followed by an asterisk outside a quoted string is now rejected everywhere.
+  2.0.0 rejected it only at the top level, so values such as
+  `calc(1px /* note */ + 2px)` passed despite the documented comment
+  rejection. Arithmetic (`calc(100% / 2)`, `calc(2*1px)`), grouping and quoted
+  top-level strings are unaffected. Migration: drop the comment from such
+  values, or pass them through `CssValue.trusted` if they are trusted.
+
+### Fixed
+
+- **`avocet.dom` resolves event targets and removals by node identity
+  (contracts §1.4).** The adapter read the positional id from a `vid`
+  property that removed nodes keep and that nodes of other roots share. A
+  removed node put back under the root by other code ran the current
+  handlers of its old position, and removing a subtree that held such a node
+  dropped live index entries, so the next update invalidated the root. An id
+  now counts only when the root's index maps it back to that very node. Events
+  from nodes the root does not currently render still dispatch no handler.
+
+### Testing
+
+- **Headless browser runs (F3).** `nix develop .#browser --no-write-lock-file
+  --command bash scripts/test-dom-fixture.sh` links the DOM fixture, runs it in
+  Nix-pinned Chromium and WebKit and self-tests the runner against injected
+  failures and interruption. The PR workflow runs it and now also targets `main`.
+- **Fixture coverage (F4).** An HTML profile matrix (supported, diagnosed and
+  outside shapes), a CSS comment case, lifecycle churn checks and node-identity
+  regressions bring the fixture to 50 checks.
+
 ## 2.0.0 (2026-11-06)
 
 Major version: saved render buffers from 1.0.0 are rejected, lifecycle

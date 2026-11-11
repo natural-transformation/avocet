@@ -323,8 +323,10 @@ div(disabledKey := busy, widthPx @= 10, color @= CssValue("red").get)
   strip; `javascript:` never passes the default policy. It is a scheme policy, not a
   sanitizer of the destination.
 - `CssValue(value)` accepts a data-safe declaration value: no `;`, braces, `<`, `>`,
-  backslash escapes, comments, `url(` or `expression(`. The interpreter protects the
-  enclosing `style` attribute in every case.
+  backslash escapes, comments, `url(` or `expression(`. A comment is any `/*` outside a
+  quoted string, including inside `calc(...)` and other allowed functions; arithmetic
+  such as `calc(100% / 2)` and `calc(2 * 1px)` is still accepted. The interpreter
+  protects the enclosing `style` attribute in every case.
 - Dynamic names are validated when a key is built (`AttrKey.validated` returns an
   `Either`), so an invalid name fails once instead of inside every render.
 - `trusted.inlineHandler`, `trusted.srcdoc`, `trusted.url` and `trusted.css` are the
