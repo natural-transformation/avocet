@@ -302,7 +302,7 @@ Reference contracts: [Spoonbill protocol generation](https://github.com/natural-
 | Memory | Large-to-small render, cache churn, many roots, repeated widget mount/unmount | Bounded retained entries and buffers; disposal releases framework references; measured allocations. |
 | API/optimizer | Custom interpreters, ordinary/optimized templates, compile failures, event/misc composition | Equivalent semantics, clear errors, no accidental mandatory effects or per-node allocation. |
 
-This matrix is a regression and extension checklist, not a statement that every case has release evidence. Consult the implementation evidence for coverage and the roadmap for completed F1 and remaining F2–F5 work; keyed/ownership cases apply only if those features proceed. Use reproducible random seeds with shrinking. Keep structural invalid-input generators separate from valid browser-HTML generators: rejecting an invalid tree is success, while silently catching an unexpected exception is not. Include deliberately injected faulty performers/encoders to establish that the tests detect relevant mistakes.
+This matrix is a regression and extension checklist, not a statement that every case has release evidence. Consult the implementation evidence for coverage and the roadmap for the completed F1–F4 follow-ups and conditional F5 work; keyed/ownership cases apply only if those features proceed. Use reproducible random seeds with shrinking. Keep structural invalid-input generators separate from valid browser-HTML generators: rejecting an invalid tree is success, while silently catching an unexpected exception is not. Include deliberately injected faulty performers/encoders to establish that the tests detect relevant mistakes.
 
 ### F2: real-service renderer acceptance
 
@@ -310,7 +310,7 @@ Close F2 only when a targeted fixture starts an actual Spoonbill service using
 explicitly resolved Avocet core/events artifacts, loads its real SSR and assembled
 client in Chromium and WebKit, and applies the first incremental patch. Use
 [Spoonbill's browser guide](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/browser-tests.md) for the existing
-service-runner pattern; a dedicated repair fixture/command is still future work.
+service-runner pattern; the dedicated fixture now exists (status below).
 
 - Cover long valid names beyond the former short-name boundary, deliberate hash
   collisions, style/attribute distinctions and delimiter-bearing style values.
@@ -322,6 +322,13 @@ service-runner pattern; a dedicated repair fixture/command is still future work.
 - Record producer/consumer commits, resolved artifacts, browser versions,
   commands and assertions. Existing serializer tests, synthetic transport checks
   and generic service tests remain separate evidence, even when they pass.
+
+Status 2026-11-12: closed by Spoonbill [#30](https://github.com/natural-transformation/spoonbill/pull/30) and
+[#31](https://github.com/natural-transformation/spoonbill/pull/31). `scripts/test-renderer-acceptance.sh` meets every item
+above in Chromium and WebKit against Avocet 2.0.0, with default and preset ids
+and a name-truncation fault probe. #31 fixed the preset-id client defect it
+found. Both PRs passed Linux CI. Guarded views, later patches, keyed moves and
+reconnects remain outside this fixture.
 
 ### F3: repeatable Avocet DOM fixture execution
 
@@ -499,8 +506,9 @@ env -u JAVA_HOME SBT_NATIVE_CLIENT=false \
 ```
 
 The first two commands use synthetic client transport. The last starts an actual
-Scala service, but still needs F2's targeted long-name/style/collision/SSR-first-patch
-cases to cover those renderer repairs end to end. Consult
+Scala service. Spoonbill's `scripts/test-renderer-acceptance.sh`, run the same way
+from a checkout at `5a58c94b` or later (Spoonbill 10.0.0 lacks it), covers F2's
+targeted long-name, style, collision and SSR-first-patch cases end to end. Consult
 [Spoonbill's browser guide](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/browser-tests.md) for further service,
 timer/component and authentication checks appropriate to the changed behavior.
 Test `avocet-dom` separately; Spoonbill does not execute that adapter.

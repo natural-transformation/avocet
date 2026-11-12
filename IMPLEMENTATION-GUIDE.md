@@ -2,8 +2,8 @@
 
 Updated: 2026-11-11. Baseline: **Avocet 2.0.1**, source `255966b` (2.0.0 was `c130282`).
 
-The [plan](IMPROVEMENT-PLAN.md) records shipped milestones and remaining F2–F5
-work. The [contracts](IMPROVEMENT-CONTRACTS.md) define supported behavior and
+The [plan](IMPROVEMENT-PLAN.md) records shipped milestones, the completed F1–F4
+follow-ups and the conditional F5 work. The [contracts](IMPROVEMENT-CONTRACTS.md) define supported behavior and
 future acceptance requirements. M1/M2 are implemented; this guide now explains
 how to adopt, maintain and extend that foundation. Do not repeat the original
 repair programme as though its APIs and tests were still missing.
@@ -17,8 +17,9 @@ The pre-release candidate runs in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EV
 remain historical evidence; do not relabel them as published-artifact checks.
 F3 browser automation and the F4 CSS, HTML-profile and churn work were
 delivered on 2026-11-11 in PR #2 (sections 5–5.2), together with a fix for the
-stale node identity that an F4 probe found. F2 real-service cases (section 6) remain.
-The release verification does not close that coverage gap.
+stale node identity that an F4 probe found. F2 real-service cases (section 6)
+followed on 2026-11-12 in Spoonbill [#30](https://github.com/natural-transformation/spoonbill/pull/30) and
+[#31](https://github.com/natural-transformation/spoonbill/pull/31), which completes the F2–F4 batch.
 
 ## 1. Choose the work and preserve its scope
 
@@ -67,8 +68,8 @@ Do not rename directories as incidental cleanup.
 
 The historical T0–T5 and T7–T8 work packages are implemented and remain useful
 evidence categories. T6 records candidate validation; F1 subsequently delivered
-released adoption in Spoonbill 10.0.0. Targeted real-service coverage remains
-outstanding under F2. T9/M3 keyed
+released adoption in Spoonbill 10.0.0. Targeted real-service coverage followed
+under F2 in Spoonbill #30 and #31 (2026-11-12). T9/M3 keyed
 identity and T10/M4 external ownership are deferred.
 Explicit DOM event outcome types and automatic text normalization were not
 delivered by T7; treat them as future API decisions, not missing source files.
@@ -287,14 +288,25 @@ owned children remains M4 work.
 
 ## 6. F2 — extend Spoonbill 10 real-service coverage
 
-Start from an isolated Spoonbill 10.0.0 or current checkout. Its
-[release-tag build](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/build.sbt#L5)
-already selects `2.0.0`; do not repeat the F1 upgrade from 1.0.0. Use published
+F2 was delivered on 2026-11-12. Spoonbill's `scripts/test-renderer-acceptance.sh`
+([#30](https://github.com/natural-transformation/spoonbill/pull/30)) runs the four cases below through a real loopback service
+and the assembled client in Chromium and WebKit, with default and preset ids,
+against Avocet 2.0.0. It found a preset-id client defect, which
+[#31](https://github.com/natural-transformation/spoonbill/pull/31) fixed. Both PRs passed Spoonbill's Linux `native-browser`
+CI; the evidence is in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md).
+The rest of this section stays as guidance for future renderer changes.
+
+Start from an isolated Spoonbill checkout at `5a58c94b` (`main` after #31) or
+later. Spoonbill 10.0.0 lacks `scripts/test-renderer-acceptance.sh`, which #30
+added, and only #31 makes its preset-id case pass. That revision, like the
+[10.0.0 release-tag build](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/build.sbt#L5),
+still selects Avocet `2.0.0`, which remains the dependency baseline; do not
+repeat the F1 upgrade from 1.0.0. Use published
 2.0.0 artifacts for baseline checks. For producer changes use a unique local
 candidate as in section 7. **Do not publish locally over 1.0.0 or 2.0.0.**
 
 ```bash
-# Isolated Spoonbill 10/current checkout; baseline needs no dependency edit.
+# Isolated Spoonbill checkout at 5a58c94b or later; baseline needs no dependency edit.
 nix develop . --no-write-lock-file --command \
   sbt 'show spoonbill/Compile/dependencyClasspath' 'spoonbill/test' 'testkit/test'
 ```
@@ -316,7 +328,7 @@ Build F2 on the existing owned-service pattern in
 and its [runner](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/scripts/test-sensitive-acknowledgement.sh). Add a
 dedicated fixture/runner or focused extension that uses the real Scala service,
 SSR/bootstrap and assembled browser client with synthetic application data.
-The targeted F2 suite does not exist yet; these are implementation entry points.
+The targeted F2 suite now exists as `scripts/test-renderer-acceptance.sh`; extend it for new renderer cases.
 
 | New case | Required observation in Chromium and WebKit |
 | --- | --- |
@@ -340,10 +352,13 @@ nix develop .#browser --no-write-lock-file --command bash scripts/test-native-br
 env -u JAVA_HOME SBT_NATIVE_CLIENT=false \
   nix develop . --no-write-lock-file --command \
   bash scripts/test-sensitive-acknowledgement.sh
+env -u JAVA_HOME SBT_NATIVE_CLIENT=false \
+  nix develop . --no-write-lock-file --command \
+  bash scripts/test-renderer-acceptance.sh
 ```
 
-The first two checks use synthetic client transport. The last starts an actual
-Scala service but lacks some targeted F2 cases. Follow
+The first two checks use synthetic client transport. The last two start an actual
+Scala service; the renderer acceptance script is the one with the targeted F2 cases. Follow
 [Spoonbill's browser guide](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/browser-tests.md) for other applicable
 service/authentication checks. Regenerate protocol constants only when their
 Scala declarations change; no move opcode shipped in Avocet 2.0.0.
@@ -368,7 +383,7 @@ env RELEASE_VERSION='2.0.2-PRODUCER_SHA-ITERATION-SNAPSHOT' \
 
 Replace `PRODUCER_SHA` and `ITERATION` before running the command; the example
 is a unique-version template, not a selected public release. Select that exact version in an isolated
-Spoonbill 10/current consumer, verify resolved artifacts and
+Spoonbill consumer at `5a58c94b` or later, verify resolved artifacts and
 run section 6's relevant checks. Local publication is unnecessary for adopting
 the published 2.0.0 release and is not a remote release. Source edits alone do
 not change a consumer's dependency selection.

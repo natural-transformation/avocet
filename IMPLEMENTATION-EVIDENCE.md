@@ -522,3 +522,65 @@ This closes the "Not yet run: the Linux CI job" item above.
   2.0.0 jar does not.
 - Not checked: a consumer build against the published 2.0.1 artifacts.
   Spoonbill 10.0.0 still selects 2.0.0.
+
+# F2 evidence (2026-11-12)
+
+```text
+Follow-up/defect/contract IDs: F2 (contracts F2 gate); Spoonbill client preset-id defect
+Producer and consumer commits/releases: Avocet 2.0.0 (c130282) from Maven Central;
+  Spoonbill 10.0.0 (f0d45634) plus #30 (squash 16658b98) and #31 (squash 5a58c94b)
+Changed behavior and compatibility impact: Spoonbill test tooling and CI, and a
+  client fix for preset-id registration; no Avocet change
+Browser path: real Spoonbill service, HTML5 SSR, bootstrap and assembled client
+```
+
+- Runner: Spoonbill `scripts/test-renderer-acceptance.sh`, documented in
+  `docs/renderer-acceptance.md`. It runs a fresh, unguarded loopback
+  `spoonbillService` with synthetic data. For each case it checks the raw HTML5
+  response, every described fixture node against the client registry for the
+  server's Avocet id, and exact attributes, styles and text. One click must produce
+  exactly one `MODIFY_DOM` frame with the expected operations. It then checks
+  the patched DOM and which nodes were retained or replaced, that the
+  patch-replaced handler never runs, and that the current one runs exactly once.
+- Cases, in Chromium and WebKit with default and preset ids:
+  - long names: tags of 12/64/1024 characters, attributes of 31/256/1024
+    characters sharing the old 10/29-character prefixes;
+  - Avocet's fixed collision witnesses (`Aa`/`BB`, `t86388`/`t118091`,
+    `s121742`/`s143709`), checked to still collide in the resolved JAR;
+  - quote-, delimiter- and markup-bearing attribute and style data, plus a
+    same-name style and attribute;
+  - the SSR first patch across a styled parent, a text node after an element, a
+    component boundary and later siblings.
+  A `truncate-names` fault probe must fail at `patched-dom`.
+- Resolved artifacts: `avocet-core_3-2.0.0.jar` (SHA-256
+  `e29b093d93adb3f03eac939454714236c5763244442daa3809bb3816ca8e35db`) and
+  `avocet-events_3-2.0.0.jar` (SHA-256
+  `9c80549be65f714f8ce3843c1946184524759078a7b14edd6c2326198bfe67c7`), printed
+  from the service's own classpath. Playwright 1.56.1, Chromium 141.0.7390.37,
+  WebKit 26.0; nixpkgs `c0b0e0fd` in both flakes.
+- Discovered defect (Spoonbill client, not Avocet): with `presetIds = true`,
+  `registerRoot` added 1 to the string read from `k`. A text node after an
+  element with `k="1"` was registered as `…_11` instead of `…_2`, and its first
+  patch appended a duplicate. #30 recorded it as a strict expected failure. #31
+  keeps the counter numeric, adds a `registerRoot` test (which failed before the
+  fix), and promotes the case to an ordinary one.
+- Results:
+  - #30: macOS, and Linux [run 43114101859](https://github.com/natural-transformation/spoonbill/actions/runs/43114101859)
+    on `39d1ec55`. Every case passed except `first-patch/preset`, which hit its
+    expected failure in both engines; the fault probe was detected.
+  - #31: macOS, and Linux runs [43172078798](https://github.com/natural-transformation/spoonbill/actions/runs/43172078798)
+    and [43173929258](https://github.com/natural-transformation/spoonbill/actions/runs/43173929258). All 16 combinations
+    passed and the fault probe was detected. The Node client suites passed
+    67/67 locally.
+  - Spoonbill regressions on the F2 branch: `spoonbill/test` 645, `testkit/test`
+    19, the four renderer/recovery specs 14, `standalone/test` 39, and
+    `test-sensitive-acknowledgement.sh` in both engines.
+- Review (`docs/pr-30-31-code-review-2026-11-12.md` in the maintainer's checkout)
+  found no blocking defects. Its follow-ups were applied before merge:
+  - the handler wait became a strict 5 s budget (a probe showed the old wait
+    overrunning to 9.8 s);
+  - both Linux runs are recorded;
+  - #31 got its own CI after being retargeted to `main`.
+- Remaining: Spoonbill still selects Avocet 2.0.0; moving it to 2.0.1 and
+  rerunning this matrix is a separate change. Guarded views, later patches,
+  keyed moves and reconnects are outside the fixture.
