@@ -506,9 +506,9 @@ env -u JAVA_HOME SBT_NATIVE_CLIENT=false \
 ```
 
 The first two commands use synthetic client transport. The last starts an actual
-Scala service. Spoonbill's `scripts/test-renderer-acceptance.sh`, run the same way,
-covers F2's targeted long-name, style, collision and SSR-first-patch cases end to
-end. Consult
+Scala service. Spoonbill's `scripts/test-renderer-acceptance.sh`, run the same way
+from a checkout at `5a58c94b` or later (Spoonbill 10.0.0 lacks it), covers F2's
+targeted long-name, style, collision and SSR-first-patch cases end to end. Consult
 [Spoonbill's browser guide](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/docs/browser-tests.md) for further service,
 timer/component and authentication checks appropriate to the changed behavior.
 Test `avocet-dom` separately; Spoonbill does not execute that adapter.

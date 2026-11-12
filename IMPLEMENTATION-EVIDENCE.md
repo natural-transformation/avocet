@@ -537,8 +537,8 @@ Browser path: real Spoonbill service, HTML5 SSR, bootstrap and assembled client
 - Runner: Spoonbill `scripts/test-renderer-acceptance.sh`, documented in
   `docs/renderer-acceptance.md`. It runs a fresh, unguarded loopback
   `spoonbillService` with synthetic data. For each case it checks the raw HTML5
-  response, every parsed node against the client registry for the server's
-  Avocet id, and exact attributes, styles and text. One click must produce
+  response, every described fixture node against the client registry for the
+  server's Avocet id, and exact attributes, styles and text. One click must produce
   exactly one `MODIFY_DOM` frame with the expected operations. It then checks
   the patched DOM and which nodes were retained or replaced, that the
   patch-replaced handler never runs, and that the current one runs exactly once.

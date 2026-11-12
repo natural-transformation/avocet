@@ -68,8 +68,8 @@ Do not rename directories as incidental cleanup.
 
 The historical T0–T5 and T7–T8 work packages are implemented and remain useful
 evidence categories. T6 records candidate validation; F1 subsequently delivered
-released adoption in Spoonbill 10.0.0. Targeted real-service coverage remains
-outstanding under F2. T9/M3 keyed
+released adoption in Spoonbill 10.0.0. Targeted real-service coverage followed
+under F2 in Spoonbill #30 and #31 (2026-11-12). T9/M3 keyed
 identity and T10/M4 external ownership are deferred.
 Explicit DOM event outcome types and automatic text normalization were not
 delivered by T7; treat them as future API decisions, not missing source files.
@@ -296,14 +296,17 @@ against Avocet 2.0.0. It found a preset-id client defect, which
 CI; the evidence is in [IMPLEMENTATION-EVIDENCE.md](IMPLEMENTATION-EVIDENCE.md).
 The rest of this section stays as guidance for future renderer changes.
 
-Start from an isolated Spoonbill 10.0.0 or current checkout. Its
-[release-tag build](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/build.sbt#L5)
-already selects `2.0.0`; do not repeat the F1 upgrade from 1.0.0. Use published
+Start from an isolated Spoonbill checkout at `5a58c94b` (`main` after #31) or
+later. Spoonbill 10.0.0 lacks `scripts/test-renderer-acceptance.sh`, which #30
+added, and only #31 makes its preset-id case pass. That revision, like the
+[10.0.0 release-tag build](https://github.com/natural-transformation/spoonbill/blob/f0d456344359eb63ea4b138d28352860eef49f3b/build.sbt#L5),
+still selects Avocet `2.0.0`, which remains the dependency baseline; do not
+repeat the F1 upgrade from 1.0.0. Use published
 2.0.0 artifacts for baseline checks. For producer changes use a unique local
 candidate as in section 7. **Do not publish locally over 1.0.0 or 2.0.0.**
 
 ```bash
-# Isolated Spoonbill 10/current checkout; baseline needs no dependency edit.
+# Isolated Spoonbill checkout at 5a58c94b or later; baseline needs no dependency edit.
 nix develop . --no-write-lock-file --command \
   sbt 'show spoonbill/Compile/dependencyClasspath' 'spoonbill/test' 'testkit/test'
 ```
@@ -380,7 +383,7 @@ env RELEASE_VERSION='2.0.2-PRODUCER_SHA-ITERATION-SNAPSHOT' \
 
 Replace `PRODUCER_SHA` and `ITERATION` before running the command; the example
 is a unique-version template, not a selected public release. Select that exact version in an isolated
-Spoonbill 10/current consumer, verify resolved artifacts and
+Spoonbill consumer at `5a58c94b` or later, verify resolved artifacts and
 run section 6's relevant checks. Local publication is unnecessary for adopting
 the published 2.0.0 release and is not a remote release. Source edits alone do
 not change a consumer's dependency selection.
